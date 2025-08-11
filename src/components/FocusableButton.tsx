@@ -1,56 +1,82 @@
 import React, { useState } from 'react';
-import { Pressable, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import {
+  Pressable,
+  Text,
+  StyleSheet,
+  PressableProps,
+  ViewStyle,
+  TextStyle,
+} from 'react-native';
 
-interface FocusableButtonProps {
-  title: string;
-  onPress: () => void;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+export interface FocusableButtonProps extends PressableProps {
+  title?: string;
+  style?: ViewStyle | ViewStyle[];
+  textStyle?: TextStyle | TextStyle[];
+  focusedStyle?: ViewStyle | ViewStyle[];
+  focusable?: boolean; // controla se pode receber foco (útil para travar foco)
 }
 
+/**
+ * Botão que muda estilo ao receber foco e aceita children (ícone/texto).
+ */
 export default function FocusableButton({
   title,
-  onPress,
+  children,
   style,
   textStyle,
-}: FocusableButtonProps) {
-  const [focused, setFocused] = useState(false);
+  focusedStyle,
+  focusable = true,
+  onFocus,
+  onBlur,
+  ...rest
+}: React.PropsWithChildren<FocusableButtonProps>) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const handleFocus: PressableProps['onFocus'] = (e) => {
+    setIsFocused(true);
+    onFocus?.(e);
+  };
+
+  const handleBlur: PressableProps['onBlur'] = (e) => {
+    setIsFocused(false);
+    onBlur?.(e);
+  };
 
   return (
     <Pressable
-      onPress={onPress}
-      onFocus={() => {
-        setFocused(true);
-        console.log(`Foco no botão: ${title}`);
-      }}
-      onBlur={() => {
-        setFocused(false);
-        console.log(`Perdeu foco: ${title}`);
-      }}
-      hasTVPreferredFocus={title === 'Canais ao Vivo'} // o primeiro botão tem foco inicial
+      {...rest}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      focusable={focusable}
       style={[
         styles.button,
-        focused && styles.focused,
         style,
+        isFocused && (focusedStyle ?? styles.focused),
       ]}
     >
-      <Text style={[styles.text, textStyle]}>{title}</Text>
+      {children ? (
+        children
+      ) : (
+        <Text style={[styles.text, textStyle]}>{title}</Text>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     borderRadius: 8,
     backgroundColor: '#222',
-    marginBottom: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   focused: {
-    backgroundColor: '#1e90ff', // Azul claro para destaque visível
-    borderColor: '#fff',
+    backgroundColor: '#1e90ff',
     borderWidth: 2,
+    borderColor: '#fff',
   },
   text: {
     color: '#fff',
