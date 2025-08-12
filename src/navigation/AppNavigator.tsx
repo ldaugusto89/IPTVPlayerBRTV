@@ -15,6 +15,7 @@ import LoginScreen from '../screens/LoginScreen';
 import PerfisScreen from '../screens/PerfisScreen';
 import PerfilForm from '../screens/PerfilFormScreen';
 import InitialScreen from '../screens/InitialScreen';
+import SeriesDetailScreen from '../screens/SeriesDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -34,6 +35,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Series" component={SeriesScreen} />
         <Stack.Screen name="Favorites" component={FavoritesScreen} />
         <Stack.Screen name="Player" component={PlayerScreen} />
+        <Stack.Screen name="SeriesDetail" component={SeriesDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

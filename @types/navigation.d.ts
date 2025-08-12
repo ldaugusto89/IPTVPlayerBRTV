@@ -12,6 +12,10 @@ export type RootStackParamList = {
   Favorites: undefined;
   Initial: undefined;
   Player: { url: string; title: string };
+  SeriesDetail: {
+        seriesName: string;
+        seriesLogo?: string;
+      };
 };
 
 export type ListaPerfil = {
@@ -24,10 +28,11 @@ export type ListaPerfil = {
   password?: string;
 };
 
-export type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
+export type SeriesDetailScreenRouteProp = RouteProp<RootStackParamList, 'SeriesDetail'>;
+export type SeriesDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SeriesDetail'>;
 
+export type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
 // Tipagem para a Navegação da Tela do Player
 export type PlayerScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Player'>;
-
 // Tipagem para outras telas, se necessário
 export type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
