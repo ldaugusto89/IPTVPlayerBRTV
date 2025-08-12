@@ -1,73 +1,75 @@
-export type Category = 'channel' | 'series' | 'movie';
+// Não precisamos mais da biblioteca 'm3u-parser'
+// import M3uParser from 'm3u-parser';
 
-export type M3UItem = {
-  title: string;
-  url: string;
-  group: string;
-  tvgId?: string;
-  logo?: string;
-  category: Category;
-};
-
-function detectCategory(streamUrl: string): Category {
-  const url = streamUrl.toLowerCase();
-
-  if (url.includes('/series/')) {
-    return 'series';
-  }
-
-  if (url.includes('/movie/')) {
-    return 'movie';
-  }
-
-  // Caso queira usar padrão por título (SxxEyy) ou group-title:
-  // if (/\bS\d{2}E\d{2}\b/i.test(streamUrl)) return 'series';
-  // if (/\(\d{4}\)$/.test(streamUrl)) return 'movie';
-
-  return 'channel';
+// Função para extrair um atributo como: tvg-name="..."
+function getAttribute(line: string, attributeName: string): string {
+  const regex = new RegExp(`${attributeName}="([^"]*)"`, 'i');
+  const match = line.match(regex);
+  return match ? match[1] : '';
 }
 
-
-export async function fetchAndParseM3U(url: string): Promise<M3UItem[]> {
-  const response = await fetch(url);
-  const text = await response.text();
-  const lines = text.split('\n');
-  const items: M3UItem[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line.startsWith('#EXTINF')) continue;
-
-    // Extrai atributos
-    const tvgId = getAttr(line, 'tvg-id');
-    const logo = getAttr(line, 'tvg-logo');
-    const group = getAttr(line, 'group-title') || 'Sem grupo';
-
-    // Título após a vírgula
-    const parts = line.split(',');
-    const title = parts.length > 1 ? parts[1].trim() : 'Sem título';
-
-    // URL da próxima linha
-    const streamUrl = lines[i + 1]?.trim();
-    if (streamUrl && streamUrl.startsWith('http')) {
-      const category = detectCategory(streamUrl);
-
-      items.push({
-        title,
-        url: streamUrl,
-        group,
-        tvgId,
-        logo,
-        category,
-      });
+export const fetchAndParseM3U = async (url: string) => {
+  try {
+    let correctedUrl = url;
+    if (correctedUrl.includes('output=ts')) {
+      correctedUrl = correctedUrl.replace('output=ts', 'output=m3u8');
     }
+
+    const response = await fetch(correctedUrl, {
+      headers: {
+        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro de rede ao buscar a lista: ${response.status}`);
+    }
+    const m3uText = await response.text();
+
+    // --- NOSSO PARSER CUSTOMIZADO ---
+    const lines = m3uText.split('\n');
+    const items = [];
+    let currentItem: any = {};
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('#EXTINF:')) {
+        // Encontramos a linha de informação de um canal
+        currentItem = {}; // Reseta o item atual
+        
+        const groupTitle = getAttribute(trimmedLine, 'group-title');
+        const tvgName = getAttribute(trimmedLine, 'tvg-name');
+        const tvgLogo = getAttribute(trimmedLine, 'tvg-logo');
+        const tvgId = getAttribute(trimmedLine, 'tvg-id');
+
+        // O nome do canal geralmente está depois da última vírgula
+        const name = trimmedLine.split(',').pop() || tvgName || 'Título Desconhecido';
+
+        currentItem = {
+          name: name.trim(),
+          logo: tvgLogo,
+          group: { title: groupTitle },
+          tvg: { id: tvgId, name: tvgName, logo: tvgLogo },
+        };
+      } else if (trimmedLine && !trimmedLine.startsWith('#')) {
+        // Esta é a linha da URL, que vem logo após a linha #EXTINF
+        if (currentItem.name) {
+          currentItem.url = trimmedLine;
+          items.push(currentItem);
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      console.log('Nenhum item foi extraído pelo parser customizado. Conteúdo recebido:', m3uText.substring(0, 1000));
+      throw new Error('A lista M3U está vazia ou em um formato irreconhecível.');
+    }
+
+    return items;
+    // --- FIM DO PARSER CUSTOMIZADO ---
+
+  } catch (error) {
+    console.error('Falha ao buscar ou processar o arquivo M3U:', error);
+    return [];
   }
-
-  return items;
-}
-
-// Extrai valor de atributo em formato attr="valor"
-function getAttr(line: string, attr: string): string | undefined {
-  const match = line.match(new RegExp(`${attr}="([^"]*)"`));
-  return match?.[1];
-}
+};
