@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, ViewStyle, TextStyle, NativeSyntheticEvent
 
 interface FocusableButtonProps {
   onPress: () => void;
+  onLongPress?: () => void; // <-- NOVO
+  delayLongPress?: number;  // <-- NOVO
   onFocus?: (event: NativeSyntheticEvent<TargetedEvent>) => void;
   onBlur?: (event: NativeSyntheticEvent<TargetedEvent>) => void;
   title?: string;
@@ -14,6 +16,8 @@ interface FocusableButtonProps {
 
 const FocusableButton: React.FC<FocusableButtonProps> = ({
   onPress,
+  onLongPress,
+  delayLongPress,
   onFocus,
   onBlur,
   title,
@@ -41,9 +45,10 @@ const FocusableButton: React.FC<FocusableButtonProps> = ({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress} // <-- NOVO
+      delayLongPress={delayLongPress || 500} // <-- NOVO (padrão de meio segundo)
       onFocus={handleFocus}
       onBlur={handleBlur}
-      // O estilo do foco agora é aplicado diretamente aqui
       style={[style, isFocused && styles.buttonFocused]}
       hasTVPreferredFocus={hasTVPreferredFocus}
     >
@@ -59,13 +64,11 @@ const FocusableButton: React.FC<FocusableButtonProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // O estilo base do botão foi removido para maior flexibilidade,
-  // pois cada componente que o usa (card, botão do sidebar) já tem seu próprio estilo.
   buttonFocused: {
     transform: [{ scale: 1.1 }],
-    borderColor: '#00aaff', // Um contorno azul claro e vibrante
+    borderColor: '#00aaff',
     borderWidth: 3,
-    borderRadius: 8, // Garante que o contorno seja arredondado
+    borderRadius: 8,
   },
   text: {
     color: 'white',

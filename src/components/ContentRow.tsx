@@ -5,6 +5,8 @@ import { M3UItem } from '../context/ChannelContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
 import FocusableButton from './FocusableButton';
+import { useFavorites } from '../context/FavoritesContext'; // Importa o hook de favoritos
+import Ionicons from 'react-native-vector-icons/Ionicons'; // Importa os ícones
 
 interface ContentRowProps {
   title: string;
@@ -18,6 +20,8 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) => {
   const navigation = useNavigation<NavigationProp>();
   const flatListRef = useRef<FlatList<M3UItem>>(null);
+  // Pega as funções do contexto de favoritos
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   const handlePress = (item: M3UItem) => {
     navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo || item.logo });
@@ -43,11 +47,12 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
         keyExtractor={(item, index) => item.url + index}
         horizontal
         showsHorizontalScrollIndicator={false}
-        // A CORREÇÃO ESTÁ AQUI: Adicionamos um padding vertical
         contentContainerStyle={{ paddingVertical: 15 }}
         renderItem={({ item, index }) => (
           <FocusableButton
             onPress={() => handlePress(item)}
+            // AQUI ESTÁ A CONEXÃO: onLongPress chama a função toggleFavorite
+            onLongPress={() => toggleFavorite(item)}
             style={styles.card}
             onFocus={() => {
               flatListRef.current?.scrollToIndex({
@@ -65,6 +70,10 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
                   defaultSource={require('../assets/placeholder.png')}
                 />
                 <View style={styles.cardOverlay} />
+                {/* AQUI ESTÁ A EXIBIÇÃO: Mostra a estrela se o item for favorito */}
+                {isFavorite(item) && (
+                  <Ionicons name="star" color="#FFD700" size={20} style={styles.starIcon} />
+                )}
                 {focused && (
                    <Text style={styles.cardTitleFocused} numberOfLines={2}>{item.name}</Text>
                 )}
@@ -79,7 +88,7 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 10, // Diminuímos a margem para compensar o padding
+    marginBottom: 10,
   },
   titleHeader: {
     flexDirection: 'row',
@@ -130,6 +139,14 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },
+  starIcon: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  }
 });
 
 export default ContentRow;

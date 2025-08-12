@@ -1,55 +1,68 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { M3UItem } from '../utils/m3uParser';
+import { M3UItem } from './ChannelContext';
 
-type FavoritesContextType = {
+const FAVORITES_KEY = '@iptv_favorites';
+
+interface FavoritesContextType {
   favorites: M3UItem[];
   toggleFavorite: (item: M3UItem) => void;
   isFavorite: (item: M3UItem) => boolean;
-};
+  toastMessage: string | null; // <-- NOVO: para a mensagem
+}
 
-const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
+const FavoritesContext = createContext<FavoritesContextType>({
+  favorites: [],
+  toggleFavorite: () => {},
+  isFavorite: () => false,
+  toastMessage: null,
+});
 
-export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const FavoritesProvider = ({ children }: { children: ReactNode }) => {
   const [favorites, setFavorites] = useState<M3UItem[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null); // <-- NOVO
 
   useEffect(() => {
+    const loadFavorites = async () => {
+      const storedFavorites = await AsyncStorage.getItem(FAVORITES_KEY);
+      if (storedFavorites) {
+        setFavorites(JSON.parse(storedFavorites));
+      }
+    };
     loadFavorites();
   }, []);
 
-  const loadFavorites = async () => {
-    const json = await AsyncStorage.getItem('@favorites');
-    if (json) setFavorites(JSON.parse(json));
+  const isFavorite = (itemToCheck: M3UItem) => {
+    return favorites.some(fav => fav.url === itemToCheck.url);
   };
 
-  const saveFavorites = async (data: M3UItem[]) => {
-    setFavorites(data);
-    await AsyncStorage.setItem('@favorites', JSON.stringify(data));
-  };
+  const toggleFavorite = (itemToToggle: M3UItem) => {
+    let newFavorites: M3UItem[];
+    let message: string;
 
-  const toggleFavorite = (item: M3UItem) => {
-    const exists = favorites.find(f => f.url === item.url);
-    if (exists) {
-      const updated = favorites.filter(f => f.url !== item.url);
-      saveFavorites(updated);
+    if (isFavorite(itemToToggle)) {
+      newFavorites = favorites.filter(fav => fav.url !== itemToToggle.url);
+      message = 'Removido dos Favoritos';
     } else {
-      saveFavorites([...favorites, item]);
+      newFavorites = [itemToToggle, ...favorites];
+      message = 'Adicionado aos Favoritos';
     }
-  };
 
-  const isFavorite = (item: M3UItem) => {
-    return favorites.some(f => f.url === item.url);
+    setFavorites(newFavorites);
+    AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(newFavorites));
+
+    // Lógica para exibir a mensagem de feedback
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2000); // Esconde a mensagem após 2 segundos
   };
 
   return (
-    <FavoritesContext.Provider value={{ favorites, toggleFavorite, isFavorite }}>
+    <FavoritesContext.Provider value={{ favorites, toggleFavorite, isFavorite, toastMessage }}>
       {children}
     </FavoritesContext.Provider>
   );
 };
 
-export const useFavorites = () => {
-  const ctx = useContext(FavoritesContext);
-  if (!ctx) throw new Error('useFavorites must be used within FavoritesProvider');
-  return ctx;
-};
+export const useFavorites = () => useContext(FavoritesContext);
