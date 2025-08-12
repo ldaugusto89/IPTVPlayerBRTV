@@ -4,12 +4,13 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { getPerfis, getUltimoPerfilId, salvarUltimoPerfil  } from '../lib/listaStorage';
 import { fetchAndParseM3U, M3UItem } from '../utils/m3uParser';
-import { useChannels } from '../context/ChannelContext';
+import { buildXtreamUrls } from '../utils/buildXtreamUrls';
+import { useContent } from '../context/ChannelContext';
 
 export default function InitialScreen() {
   const navigation = useNavigation<any>();
   const { user, loading } = useAuth();
-  const { setChannels } = useChannels();
+  const { setAllContent } = useContent();
 
   useEffect(() => {
     const verificarFluxo = async () => {
@@ -21,7 +22,6 @@ export default function InitialScreen() {
       }
 
       const perfis = await getPerfis();
-
       if (!perfis || perfis.length === 0) {
         navigation.reset({ index: 0, routes: [{ name: 'Perfis' }] });
         return;
@@ -29,24 +29,25 @@ export default function InitialScreen() {
 
       const ultimoId = await getUltimoPerfilId();
       const perfil = perfis.find(p => p.id === ultimoId) || perfis[0];
-
-      // Salvar último perfil
       await salvarUltimoPerfil(perfil.id);
 
+      // Gera URL de M3U
+      const { m3u } = buildXtreamUrls(
+        perfil.host || '',
+        perfil.username || '',
+        perfil.password || ''
+      );
+      const urlFinal = perfil.tipo === 'url' ? perfil.url! : m3u;
+
       try {
-        const urlFinal =
-          perfil.tipo === 'url'
-            ? perfil.url!
-            : `${perfil.host?.replace(/\/$/, '')}/get.php?username=${perfil.username}&password=${perfil.password}&type=m3u_plus&output=ts`;
-
         const canais: M3UItem[] = await fetchAndParseM3U(urlFinal);
-
-        setChannels(canais);
+        setAllContent(canais);
 
         if (canais.length > 0) {
           navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         } else {
           Alert.alert('Lista vazia ou inválida');
+          navigation.reset({ index: 0, routes: [{ name: 'Perfis' }] });
         }
       } catch (err) {
         console.warn('Erro ao carregar lista:', err);
@@ -56,6 +57,7 @@ export default function InitialScreen() {
 
     verificarFluxo();
   }, [user, loading]);
+
 
   return (
     <View style={styles.loading}>

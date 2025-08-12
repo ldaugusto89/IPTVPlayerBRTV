@@ -1,155 +1,141 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Alert,
-} from 'react-native';
-import { salvarUltimoPerfil } from '../lib/listaStorage';
+import { View, Text, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import {   getPerfis, removerPerfil } from '../lib/listaStorage';
-import { useChannels } from '../context/ChannelContext';
-import { fetchAndParseM3U } from '../utils/m3uParser';
-import { ListaPerfil } from '../../@types/navigation';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
-import { buildXtreamUrls } from '../utils/buildXtreamUrls';
+import { obterPerfis, ListaPerfil, salvarUltimoPerfil } from '../lib/listaStorage';
+import { fetchAndParseM3U } from '../utils/m3uParser';
+import FocusableButton from '../components/FocusableButton';
+import { useContent } from '../context/ChannelContext'; // MUDANÇA AQUI
 
-type PerfisScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Perfis'>;
+type PerfisScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Perfis'>;
 
 export default function PerfisScreen() {
   const [perfis, setPerfis] = useState<ListaPerfil[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingList, setLoadingList] = useState<string | null>(null); // Para o loading individual
   const navigation = useNavigation<PerfisScreenNavigationProp>();
-  const { setChannels } = useChannels();
+  const { setAllContent } = useContent(); // MUDANÇA AQUI: usamos o hook customizado
 
   useEffect(() => {
+    const carregarPerfis = async () => {
+      const perfisSalvos = await obterPerfis();
+      setPerfis(perfisSalvos);
+      setLoading(false);
+    };
     carregarPerfis();
-    const unsubscribe = navigation.addListener('focus', carregarPerfis);
-    return unsubscribe;
-  }, [navigation]);
-
-  const carregarPerfis = async () => {
-    const dados = await getPerfis();
-    setPerfis(dados);
-  };
+  }, []);
 
   const handleSelecionar = async (perfil: ListaPerfil) => {
+    setLoadingList(perfil.id); // Ativa o loading para este perfil
     try {
-      let finalUrl = '';
+      const items = await fetchAndParseM3U(perfil.url);
 
-      if (perfil.tipo === 'url' && perfil.url) {
-        finalUrl = perfil.url;
-      } else if (
-        perfil.tipo === 'api' &&
-        perfil.host &&
-        perfil.username &&
-        perfil.password
-      ) {
-        finalUrl = buildXtreamUrls(perfil.host, perfil.username, perfil.password).m3u;
-      } else {
-        Alert.alert('Erro', 'Perfil incompleto ou inválido.');
+      if (items.length === 0) {
+        Alert.alert('Aviso', 'A lista está vazia ou não pôde ser carregada.');
+        setLoadingList(null);
         return;
       }
 
-      const canais = await fetchAndParseM3U(finalUrl);
-
-      if (canais.length === 0) {
-        Alert.alert('Erro', 'Lista vazia ou inválida.');
-        return;
-      }
-
-      setChannels(canais);
+      setAllContent(items); // A nova função que separa tudo
       await salvarUltimoPerfil(perfil.id);
+      
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
       });
-
     } catch (err) {
-      Alert.alert('Erro ao carregar lista', String(err));
+      console.error("Erro ao carregar a lista:", err);
+      Alert.alert('Erro', 'Não foi possível carregar a lista. Verifique a URL e sua conexão.');
+      setLoadingList(null); // Desativa o loading em caso de erro
     }
   };
 
-  const handleRemover = async (id: string) => {
-    Alert.alert('Remover perfil', 'Tem certeza que deseja excluir?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover',
-        style: 'destructive',
-        onPress: async () => {
-          await removerPerfil(id);
-          carregarPerfis();
-        },
-      },
-    ]);
-  };
-
-  const renderItem = ({ item }: { item: ListaPerfil }) => (
-    <View style={styles.card}>
-      <Text style={styles.nome}>{item.nome}</Text>
-      <Text style={styles.tipo}>{item.tipo === 'url' ? 'Lista via URL' : 'Login via API'}</Text>
-
-      <View style={styles.actions}>
-        <Pressable style={styles.botao} onPress={() => handleSelecionar(item)}>
-          <Text style={styles.botaoTexto}>Usar</Text>
-        </Pressable>
-        <Pressable
-          style={styles.botao}
-          onPress={() => navigation.navigate('PerfilForm', { perfil: item })}
-        >
-          <Text style={styles.botaoTexto}>Editar</Text>
-        </Pressable>
-        <Pressable style={styles.botao} onPress={() => handleRemover(item.id)}>
-          <Text style={[styles.botaoTexto, { color: 'red' }]}>Excluir</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
+  if (loading) {
+    return <ActivityIndicator style={styles.centered} size="large" color="#fff" />;
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.titulo}>Perfis de Lista</Text>
-
+      <Text style={styles.title}>Quem está assistindo?</Text>
       <FlatList
         data={perfis}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.vazio}>Nenhum perfil salvo</Text>}
+        keyExtractor={item => item.id}
+        numColumns={4}
+        renderItem={({ item }) => (
+          <View style={styles.perfilContainer}>
+            <FocusableButton
+              style={styles.perfilButton}
+              onPress={() => handleSelecionar(item)}
+            >
+              {loadingList === item.id ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.perfilInitial}>{item.nome.charAt(0)}</Text>
+              )}
+            </FocusableButton>
+            <Text style={styles.perfilName}>{item.nome}</Text>
+          </View>
+        )}
       />
-
-      <Pressable
-        style={styles.adicionar}
+      <FocusableButton
+        title="Adicionar Perfil"
         onPress={() => navigation.navigate('PerfilForm')}
-      >
-        <Text style={styles.adicionarTexto}>+ Novo Perfil</Text>
-      </Pressable>
+        style={styles.addButton}
+        textStyle={styles.addButtonText}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000', padding: 16 },
-  titulo: { fontSize: 24, color: '#fff', marginBottom: 16 },
-  card: {
-    backgroundColor: '#111',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  nome: { fontSize: 18, color: '#fff', marginBottom: 4 },
-  tipo: { fontSize: 14, color: '#aaa' },
-  actions: { flexDirection: 'row', marginTop: 10, gap: 12 },
-  botao: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#222', borderRadius: 6 },
-  botaoTexto: { color: '#fff', fontSize: 14 },
-  adicionar: {
-    backgroundColor: '#444',
-    padding: 16,
-    borderRadius: 10,
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    backgroundColor: '#141414',
   },
-  adicionarTexto: { color: '#fff', fontSize: 18 },
-  vazio: { color: '#aaa', textAlign: 'center', marginTop: 30 },
+  container: {
+    flex: 1,
+    backgroundColor: '#141414',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 32,
+    color: 'white',
+    marginBottom: 50,
+  },
+  perfilContainer: {
+    alignItems: 'center',
+    margin: 20,
+  },
+  perfilButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 10,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  perfilInitial: {
+    fontSize: 60,
+    color: 'white',
+  },
+  perfilName: {
+    color: 'white',
+    marginTop: 10,
+    fontSize: 18,
+  },
+  addButton: {
+    marginTop: 40,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    borderWidth: 1,
+    borderColor: '#888',
+  },
+  addButtonText: {
+    color: '#888',
+    fontSize: 16,
+  },
 });

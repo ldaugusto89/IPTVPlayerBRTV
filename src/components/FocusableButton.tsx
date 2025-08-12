@@ -1,86 +1,76 @@
 import React, { useState } from 'react';
-import {
-  Pressable,
-  Text,
-  StyleSheet,
-  PressableProps,
-  ViewStyle,
-  TextStyle,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, ViewStyle, TextStyle, NativeSyntheticEvent, TargetedEvent } from 'react-native';
 
-export interface FocusableButtonProps extends PressableProps {
+interface FocusableButtonProps {
+  onPress: () => void;
+  onFocus?: (event: NativeSyntheticEvent<TargetedEvent>) => void;
+  onBlur?: (event: NativeSyntheticEvent<TargetedEvent>) => void;
   title?: string;
-  style?: ViewStyle | ViewStyle[];
-  textStyle?: TextStyle | TextStyle[];
-  focusedStyle?: ViewStyle | ViewStyle[];
-  focusable?: boolean; // controla se pode receber foco (útil para travar foco)
+  style?: ViewStyle;
+  textStyle?: TextStyle;
+  children?: React.ReactNode | (({ focused }: { focused: boolean }) => React.ReactNode);
+  hasTVPreferredFocus?: boolean;
 }
 
-/**
- * Botão que muda estilo ao receber foco e aceita children (ícone/texto).
- */
-export default function FocusableButton({
-  title,
-  children,
-  style,
-  textStyle,
-  focusedStyle,
-  focusable = true,
+const FocusableButton: React.FC<FocusableButtonProps> = ({
+  onPress,
   onFocus,
   onBlur,
-  ...rest
-}: React.PropsWithChildren<FocusableButtonProps>) {
+  title,
+  style,
+  textStyle,
+  children,
+  hasTVPreferredFocus,
+}) => {
   const [isFocused, setIsFocused] = useState(false);
 
-  const handleFocus: PressableProps['onFocus'] = (e) => {
+  const handleFocus = (e: NativeSyntheticEvent<TargetedEvent>) => {
     setIsFocused(true);
-    onFocus?.(e);
+    if (onFocus) {
+      onFocus(e);
+    }
   };
 
-  const handleBlur: PressableProps['onBlur'] = (e) => {
+  const handleBlur = (e: NativeSyntheticEvent<TargetedEvent>) => {
     setIsFocused(false);
-    onBlur?.(e);
+    if (onBlur) {
+      onBlur(e);
+    }
   };
 
   return (
     <Pressable
-      {...rest}
+      onPress={onPress}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      focusable={focusable}
-      style={[
-        styles.button,
-        style,
-        isFocused && (focusedStyle ?? styles.focused),
-      ]}
+      // O estilo do foco agora é aplicado diretamente aqui
+      style={[style, isFocused && styles.buttonFocused]}
+      hasTVPreferredFocus={hasTVPreferredFocus}
     >
-      {children ? (
+      {typeof children === 'function' ? (
+        children({ focused: isFocused })
+      ) : children ? (
         children
       ) : (
         <Text style={[styles.text, textStyle]}>{title}</Text>
       )}
     </Pressable>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  button: {
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#222',
-    marginBottom: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  focused: {
-    backgroundColor: '#1e90ff',
-    borderWidth: 2,
-    borderColor: '#fff',
+  // O estilo base do botão foi removido para maior flexibilidade,
+  // pois cada componente que o usa (card, botão do sidebar) já tem seu próprio estilo.
+  buttonFocused: {
+    transform: [{ scale: 1.1 }],
+    borderColor: '#00aaff', // Um contorno azul claro e vibrante
+    borderWidth: 3,
+    borderRadius: 8, // Garante que o contorno seja arredondado
   },
   text: {
-    color: '#fff',
-    fontSize: 18,
-    textAlign: 'center',
+    color: 'white',
+    fontSize: 16,
   },
 });
+
+export default FocusableButton;

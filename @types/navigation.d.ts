@@ -1,3 +1,6 @@
+import { RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+
 export type RootStackParamList = {
   Login: undefined;
   Home: undefined;
@@ -20,3 +23,11 @@ export type ListaPerfil = {
   username?: string;
   password?: string;
 };
+
+export type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
+
+// Tipagem para a Navegação da Tela do Player
+export type PlayerScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Player'>;
+
+// Tipagem para outras telas, se necessário
+export type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;

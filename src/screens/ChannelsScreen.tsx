@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, TouchableOpacity } from 'react-native';
-import { useChannels } from '../context/ChannelContext';
-import { M3UItem } from '../utils/m3uParser';
+import { useContent } from '../context/ChannelContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../@types/navigation';
@@ -11,7 +10,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons'; // ou react-native-ve
 type NavigationProps = NativeStackNavigationProp<RootStackParamList, 'Canais'>;
 
 export default function ChannelsScreen() {
-  const { channels } = useChannels();
+  const { channels } = useContent();
   const grouped = groupBy(channels, 'group');
   const navigation = useNavigation<NavigationProps>();
   const { toggleFavorite, isFavorite } = useFavorites();
@@ -27,7 +26,11 @@ export default function ChannelsScreen() {
               data={grouped[group]}
               keyExtractor={(item, idx) => item.url + idx}
               renderItem={({ item }) => (
-                <Pressable style={styles.card} onPress={() => navigation.navigate('Player', { url: item.url, title: item.title })}
+                <Pressable 
+                  style={styles.card} 
+                  onPress={() => navigation.navigate('Player', { url: item.url, title: item.title })}
+                  onLongPress={() => toggleFavorite(item)} // Adicione esta linha
+                  delayLongPress={500} // Meio segundo para ativar
                 > 
                   <TouchableOpacity onPress={() => toggleFavorite(item)} style={styles.favoriteIcon}>
                     <Ionicons name={isFavorite(item) ? 'star' : 'star-outline'} size={24} color="gold"/>

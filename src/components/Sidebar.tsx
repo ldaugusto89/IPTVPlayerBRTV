@@ -1,78 +1,58 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, BackHandler } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { usePerfil } from '../context/PerfilContext';
+import React from 'react';
+import { View, StyleSheet, Platform,Text } from 'react-native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../@types/navigation';
 import FocusableButton from './FocusableButton';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
+// Definimos as propriedades que o Sidebar espera receber
 interface SidebarProps {
-  onClose: () => void;
-  onNavigate: (route: string) => void;
-  isOpen: boolean;
+  navigation: StackNavigationProp<RootStackParamList>;
 }
 
-export default function Sidebar({ onClose, onNavigate, isOpen }: SidebarProps) {
-  const { user } = useAuth();
-  const { perfilSelecionado } = usePerfil();
+// Criamos um tipo para os nossos botões de navegação
+type NavItem = {
+  name: keyof RootStackParamList;
+  icon: string;
+  label: string;
+};
 
-  // Fecha a sidebar ao apertar "voltar" (apenas enquanto aberta)
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose();
-      return true;
-    });
-    return () => handler.remove();
-  }, [isOpen, onClose]);
+const navItems: NavItem[] = [
+  { name: 'Home', icon: 'home-outline', label: 'Início' },
+  { name: 'Canais', icon: 'tv-outline', label: 'Canais' },
+  { name: 'Filmes', icon: 'film-outline', label: 'Filmes' },
+  { name: 'Series', icon: 'albums-outline', label: 'Séries' },
+  { name: 'Favorites', icon: 'star-outline', label: 'Favoritos' },
+];
 
+const settingsItem: NavItem = { name: 'Perfis', icon: 'settings-outline', label: 'Perfis' };
+
+
+export default function Sidebar({ navigation }: SidebarProps) {
   return (
-    <View style={styles.container} pointerEvents={isOpen ? 'auto' : 'none'}>
-      <Text style={styles.title}>☰ Menu</Text>
+    <View style={styles.container}>
+      <View>
+        {navItems.map((item) => (
+          <FocusableButton
+            key={item.name}
+            style={styles.navButton}
+            onPress={() => navigation.navigate(item.name)}
+          >
+            <Ionicons name={item.icon} size={28} color="white" />
+            {Platform.OS !== 'android' && Platform.OS !== 'ios' && <Text style={styles.navLabel}>{item.label}</Text>}
+          </FocusableButton>
+        ))}
+      </View>
 
-      <Text style={styles.userInfo}>
-        Usuário: {user?.anonimo ? 'Visitante' : user?.email}
-      </Text>
-
-      {perfilSelecionado ? (
-        <>
-          <Text style={styles.userInfo}>Perfil: {perfilSelecionado.nome}</Text>
-          <Text style={styles.userInfo}>Tipo: {perfilSelecionado.tipo}</Text>
-        </>
-      ) : (
-        <Text style={styles.userInfo}>Nenhum perfil selecionado</Text>
-      )}
-
-      <View style={styles.menu}>
+      <View>
         <FocusableButton
-          title="Canais ao Vivo"
-          onPress={() => onNavigate('Canais')}
-          style={styles.menuButton}
-          focusable={isOpen}
-          hasTVPreferredFocus={isOpen} // ganha foco quando a sidebar abre
-        />
-        <FocusableButton
-          title="Filmes"
-          onPress={() => onNavigate('Filmes')}
-          style={styles.menuButton}
-          focusable={isOpen}
-        />
-        <FocusableButton
-          title="Séries"
-          onPress={() => onNavigate('Series')}
-          style={styles.menuButton}
-          focusable={isOpen}
-        />
-        <FocusableButton
-          title="Configurações"
-          onPress={() => onNavigate('Configuracoes')}
-          style={styles.menuButton}
-          focusable={isOpen}
-        />
-        <FocusableButton
-          title="Fechar"
-          onPress={onClose}
-          style={[styles.menuButton, styles.closeButton]}
-          focusable={isOpen}
-        />
+            key={settingsItem.name}
+            style={styles.navButton}
+            onPress={() => navigation.navigate(settingsItem.name)}
+          >
+            <Ionicons name={settingsItem.icon} size={28} color="white" />
+            {Platform.OS !== 'android' && Platform.OS !== 'ios' && <Text style={styles.navLabel}>{settingsItem.label}</Text>}
+          </FocusableButton>
       </View>
     </View>
   );
@@ -80,28 +60,24 @@ export default function Sidebar({ onClose, onNavigate, isOpen }: SidebarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    width: 300,
-    backgroundColor: '#111',
-    padding: 16,
+    width: 90, // Largura do sidebar
+    backgroundColor: '#000', // Fundo preto para contraste
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between', // Empurra as configurações para o final
     height: '100%',
   },
-  title: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
+  navButton: {
+    marginBottom: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30, // Botões redondos
   },
-  userInfo: {
-    color: '#aaa',
-    marginTop: 4,
-  },
-  menu: {
-    marginTop: 24,
-  },
-  menuButton: {
-    marginBottom: 12,
-  },
-  closeButton: {
-    backgroundColor: '#900',
-  },
+  navLabel: {
+    color: 'white',
+    marginTop: 5,
+    fontSize: 12,
+  }
 });

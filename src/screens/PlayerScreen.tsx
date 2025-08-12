@@ -1,37 +1,46 @@
-import React from 'react';
-import { View, StyleSheet, Dimensions, Pressable, Text, Alert } from 'react-native';
-import Video from 'react-native-video';
-import { useNavigation, useRoute, RouteProp  } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../@types/navigation';
-
-type PlayerScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Player'>;
-type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>; 
-
-const { width, height } = Dimensions.get('window');
+import React, { useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, BackHandler, Pressable, Text } from 'react-native';
+import Video, { OnProgressData } from 'react-native-video';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { PlayerScreenRouteProp, PlayerScreenNavigationProp } from '../../@types/navigation';
+import { useHistory } from '../context/HistoryContext'; // 1. IMPORTE O HOOK DO HISTÓRICO
 
 export default function PlayerScreen() {
   const route = useRoute<PlayerScreenRouteProp>();
   const navigation = useNavigation<PlayerScreenNavigationProp>();
-  const { url, title } = route.params;
+  const { url, title, logo } = route.params; // Pegamos os dados do item
+  
+  const { addToHistory } = useHistory(); // 2. PEGUE A FUNÇÃO DO CONTEXTO
+  const hasSavedToHistory = useRef(false); // Ref para controlar o salvamento
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.goBack();
+      return true;
+    });
+    return () => backHandler.remove();
+  }, [navigation]);
+
+  const handleProgress = (data: OnProgressData) => {
+    // Salva no histórico após 30 segundos, e apenas uma vez
+    if (data.currentTime > 30 && !hasSavedToHistory.current) {
+      addToHistory({ name: title, url, logo, group: { title: '' } }); // Salva o item
+      hasSavedToHistory.current = true; // Marca como salvo
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Video
-        source={{ uri: url , headers: {
-        'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
-        },}}
+        source={{ uri: url }}
         style={styles.video}
-        controls
+        controls={true}
         resizeMode="contain"
-        fullscreen
-        onError={(err) => {
-            console.log('Erro no player:', err);
-            //Alert.alert('Erro', 'Não foi possível reproduzir este canal.');
-            }}
+        fullscreen={true}
+        onProgress={handleProgress} // 3. CHAME A FUNÇÃO AQUI
+        onError={(err) => console.log('Erro no player:', err)}
       />
-
-      <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+       <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
         <Text style={styles.backText}>← Voltar</Text>
       </Pressable>
     </View>
@@ -39,21 +48,23 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black', justifyContent: 'center' },
+  container: {
+    flex: 1,
+    backgroundColor: 'black',
+  },
   video: {
-    width: width,
-    height: height,
+    ...StyleSheet.absoluteFillObject,
   },
   backButton: {
     position: 'absolute',
     top: 40,
     left: 20,
-    backgroundColor: '#00000099',
     padding: 10,
-    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 5,
   },
   backText: {
-    color: '#fff',
-    fontSize: 18,
-  },
+    color: 'white',
+    fontSize: 16,
+  }
 });
