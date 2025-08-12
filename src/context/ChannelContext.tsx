@@ -1,6 +1,7 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Define a estrutura de um item da lista M3U
+// A estrutura de um item da lista M3U
 export interface M3UItem {
   name: string;
   url: string;
@@ -13,10 +14,9 @@ export interface M3UItem {
     name: string;
     logo: string;
   };
-  // Adicione quaisquer outros campos que seu parser retorna
 }
 
-// Define os tipos para o nosso contexto
+// Tipos para o nosso contexto
 interface ChannelContextType {
   channels: M3UItem[];
   movies: M3UItem[];
@@ -26,7 +26,7 @@ interface ChannelContextType {
   setIsLoading: (loading: boolean) => void;
 }
 
-// Cria o contexto com valores padrão
+// Contexto com valores padrão
 const ChannelContext = createContext<ChannelContextType>({
   channels: [],
   movies: [],
@@ -36,7 +36,7 @@ const ChannelContext = createContext<ChannelContextType>({
   setIsLoading: () => {},
 });
 
-// Componente Provedor que envolve a aplicação
+// Componente Provedor
 export const ChannelProvider = ({ children }: { children: ReactNode }) => {
   const [channels, setChannels] = useState<M3UItem[]>([]);
   const [movies, setMovies] = useState<M3UItem[]>([]);
@@ -51,12 +51,12 @@ export const ChannelProvider = ({ children }: { children: ReactNode }) => {
     const seriesData: M3UItem[] = [];
 
     items.forEach(item => {
-      const groupTitle = item.group?.title?.toLowerCase() || '';
+      // AQUI ESTÁ A NOVA LÓGICA: Verificamos a URL do item
+      const url = item.url.toLowerCase();
 
-      // Lógica de separação (pode ser ajustada conforme a sua lista)
-      if (groupTitle.includes('filme') || groupTitle.includes('movie')) {
+      if (url.includes('/movie/')) {
         moviesData.push(item);
-      } else if (groupTitle.includes('série') || groupTitle.includes('series') || groupTitle.includes('serie')) {
+      } else if (url.includes('/series/')) {
         seriesData.push(item);
       } else {
         channelsData.push(item);
@@ -76,5 +76,5 @@ export const ChannelProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Hook customizado para usar o contexto facilmente
+// Hook customizado para usar o contexto
 export const useContent = () => useContext(ChannelContext);

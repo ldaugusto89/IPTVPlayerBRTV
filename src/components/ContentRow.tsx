@@ -5,8 +5,9 @@ import { M3UItem } from '../context/ChannelContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
 import FocusableButton from './FocusableButton';
-import { useFavorites } from '../context/FavoritesContext'; // Importa o hook de favoritos
-import Ionicons from 'react-native-vector-icons/Ionicons'; // Importa os ícones
+import { useFavorites } from '../context/FavoritesContext';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient'; // Precisaremos desta nova biblioteca
 
 interface ContentRowProps {
   title: string;
@@ -20,7 +21,6 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) => {
   const navigation = useNavigation<NavigationProp>();
   const flatListRef = useRef<FlatList<M3UItem>>(null);
-  // Pega as funções do contexto de favoritos
   const { toggleFavorite, isFavorite } = useFavorites();
 
   const handlePress = (item: M3UItem) => {
@@ -30,6 +30,8 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
   if (!data || data.length === 0) {
     return null;
   }
+
+  const isChannel = type === 'channel';
 
   return (
     <View style={styles.container}>
@@ -51,33 +53,26 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
         renderItem={({ item, index }) => (
           <FocusableButton
             onPress={() => handlePress(item)}
-            // AQUI ESTÁ A CONEXÃO: onLongPress chama a função toggleFavorite
             onLongPress={() => toggleFavorite(item)}
-            style={styles.card}
+            style={isChannel ? styles.channelCard : styles.posterCard}
             onFocus={() => {
-              flatListRef.current?.scrollToIndex({
-                index,
-                animated: true,
-                viewPosition: 0.5,
-              });
+              flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
             }}
           >
-            {({ focused }) => (
-              <>
-                <Image
-                  style={styles.cardImage}
-                  source={{ uri: item.tvg?.logo || item.logo }}
-                  defaultSource={require('../assets/placeholder.png')}
-                />
-                <View style={styles.cardOverlay} />
-                {/* AQUI ESTÁ A EXIBIÇÃO: Mostra a estrela se o item for favorito */}
-                {isFavorite(item) && (
-                  <Ionicons name="star" color="#FFD700" size={20} style={styles.starIcon} />
-                )}
-                {focused && (
-                   <Text style={styles.cardTitleFocused} numberOfLines={2}>{item.name}</Text>
-                )}
-              </>
+            {/* Layout Unificado */}
+            <Image
+              style={isChannel ? styles.cardImageContain : styles.cardImageCover}
+              source={{ uri: item.tvg?.logo || item.logo }}
+              defaultSource={require('../assets/placeholder.png')}
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              style={styles.gradientOverlay}
+            />
+            <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
+            
+            {isFavorite(item) && (
+              <Ionicons name="star" color="#FFD700" size={18} style={styles.starIcon} />
             )}
           </FocusableButton>
         )}
@@ -87,66 +82,19 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 10,
-  },
-  titleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    marginBottom: 5,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  seeAllButton: {
-    paddingHorizontal: 10,
-  },
-  seeAllText: {
-    color: '#aaa',
-    fontSize: 14,
-  },
-  card: {
-    width: 130,
-    height: 180,
-    marginHorizontal: 8,
-    borderRadius: 8,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-    backgroundColor: '#333',
-  },
-  cardOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 8,
-  },
-  cardTitleFocused: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 5,
-  },
-  starIcon: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  }
+  container: { marginBottom: 10 },
+  titleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, marginBottom: 5 },
+  title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  seeAllButton: { paddingHorizontal: 10 },
+  seeAllText: { color: '#aaa', fontSize: 14 },
+  // --- ESTILOS DE CARD UNIFICADOS ---
+  posterCard: { width: 130, height: 180, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', justifyContent: 'flex-end' },
+  channelCard: { width: 150, height: 150, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', justifyContent: 'flex-end' },
+  cardImageContain: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'contain', margin: 10 },
+  cardImageCover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'cover', borderRadius: 8 },
+  gradientOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', borderRadius: 8 },
+  cardTitle: { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center', padding: 8, zIndex: 1 },
+  starIcon: { position: 'absolute', top: 8, right: 8, zIndex: 1 },
 });
 
 export default ContentRow;
