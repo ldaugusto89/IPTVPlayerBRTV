@@ -7,7 +7,7 @@ import { RootStackParamList } from '../../@types/navigation';
 import FocusableButton from './FocusableButton';
 import { useFavorites } from '../context/FavoritesContext';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient'; // Precisaremos desta nova biblioteca
+import LinearGradient from 'react-native-linear-gradient';
 
 interface ContentRowProps {
   title: string;
@@ -18,20 +18,32 @@ interface ContentRowProps {
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
+// Reutilizamos a função para extrair o nome base da série
+const getSeriesBaseName = (name: string) => name.split(/ S\d{1,2}E\d{1,2}/i)[0].trim();
+
 const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) => {
   const navigation = useNavigation<NavigationProp>();
   const flatListRef = useRef<FlatList<M3UItem>>(null);
   const { toggleFavorite, isFavorite } = useFavorites();
 
   const handlePress = (item: M3UItem) => {
-    navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo || item.logo });
+    // AQUI ESTÁ A NOVA LÓGICA DE NAVEGAÇÃO
+    if (type === 'series') {
+      // Se for uma série, extrai o nome base e navega para a tela de detalhes
+      const seriesName = getSeriesBaseName(item.name);
+      navigation.navigate('SeriesDetail', { 
+        seriesName: seriesName, 
+        seriesLogo: item.tvg?.logo || item.logo 
+      });
+    } else {
+      // Para filmes e canais, continua a ir diretamente para o player
+      navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo || item.logo });
+    }
   };
 
   if (!data || data.length === 0) {
     return null;
   }
-
-  const isChannel = type === 'channel';
 
   return (
     <View style={styles.container}>
@@ -50,32 +62,36 @@ const ContentRow: React.FC<ContentRowProps> = ({ title, data, type, onSeeAll }) 
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingVertical: 15 }}
-        renderItem={({ item, index }) => (
-          <FocusableButton
-            onPress={() => handlePress(item)}
-            onLongPress={() => toggleFavorite(item)}
-            style={isChannel ? styles.channelCard : styles.posterCard}
-            onFocus={() => {
-              flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-            }}
-          >
-            {/* Layout Unificado */}
-            <Image
-              style={isChannel ? styles.cardImageContain : styles.cardImageCover}
-              source={{ uri: item.tvg?.logo || item.logo }}
-              defaultSource={require('../assets/placeholder.png')}
-            />
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.8)']}
-              style={styles.gradientOverlay}
-            />
-            <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
-            
-            {isFavorite(item) && (
-              <Ionicons name="star" color="#FFD700" size={18} style={styles.starIcon} />
-            )}
-          </FocusableButton>
-        )}
+        renderItem={({ item, index }) => {
+          // Determina o nome a ser exibido
+          const displayName = type === 'series' ? getSeriesBaseName(item.name) : item.name;
+
+          return (
+            <FocusableButton
+              onPress={() => handlePress(item)}
+              onLongPress={() => toggleFavorite(item)}
+              style={type === 'channel' ? styles.channelCard : styles.posterCard}
+              onFocus={() => {
+                flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+              }}
+            >
+              <Image
+                style={type === 'channel' ? styles.cardImageContain : styles.cardImageCover}
+                source={{ uri: item.tvg?.logo || item.logo }}
+                defaultSource={require('../assets/placeholder.png')}
+              />
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                style={styles.gradientOverlay}
+              />
+              <Text style={styles.cardTitle} numberOfLines={2}>{displayName}</Text>
+              
+              {isFavorite(item) && (
+                <Ionicons name="star" color="#FFD700" size={18} style={styles.starIcon} />
+              )}
+            </FocusableButton>
+          );
+        }}
       />
     </View>
   );
@@ -87,7 +103,6 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   seeAllButton: { paddingHorizontal: 10 },
   seeAllText: { color: '#aaa', fontSize: 14 },
-  // --- ESTILOS DE CARD UNIFICADOS ---
   posterCard: { width: 130, height: 180, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', justifyContent: 'flex-end' },
   channelCard: { width: 150, height: 150, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', justifyContent: 'flex-end' },
   cardImageContain: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'contain', margin: 10 },

@@ -15,6 +15,7 @@
     "@react-navigation/native": "^7.1.16",
     "@react-navigation/native-stack": "^7.3.23",
     "@react-navigation/stack": "^7.4.7",
+    "@shopify/flash-list": "^2.0.2",
     "lottie-react-native": "^7.3.1",
     "react": "19.1.0",
     "react-native": "npm:react-native-tvos@0.80.1-0",
