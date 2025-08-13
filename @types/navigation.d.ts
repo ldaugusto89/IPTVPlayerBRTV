@@ -13,9 +13,14 @@ export type RootStackParamList = {
   Initial: undefined;
   Player: { url: string; title: string };
   SeriesDetail: {
-        seriesName: string;
-        seriesLogo?: string;
-      };
+    seriesName: string;
+    seriesLogo?: string;
+  };
+  CategoryDetail: {
+    title: string;
+    items: M3UItem[];
+    type: 'movie' | 'series';
+  };
 };
 
 export type ListaPerfil = {
