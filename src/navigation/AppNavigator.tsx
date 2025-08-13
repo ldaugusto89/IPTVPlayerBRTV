@@ -16,12 +16,11 @@ import PerfisScreen from '../screens/PerfisScreen';
 import PerfilForm from '../screens/PerfilFormScreen';
 import InitialScreen from '../screens/InitialScreen';
 import SeriesDetailScreen from '../screens/SeriesDetailScreen';
+import CategoryDetailScreen from '../screens/CategoryDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
-  const { loading } = useAuth();
-
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -36,6 +35,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Favorites" component={FavoritesScreen} />
         <Stack.Screen name="Player" component={PlayerScreen} />
         <Stack.Screen name="SeriesDetail" component={SeriesDetailScreen} />
+        <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
