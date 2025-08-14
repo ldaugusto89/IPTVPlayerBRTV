@@ -1,67 +1,60 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { fetchAndParseXMLTV, EPGProgram } from '../utils/xmltvParser';
+import { EPGProgram, fetchAndParseXMLTV } from '../services/xmltvParser';
 
+// Define a forma do nosso contexto
 interface EPGContextType {
-  epgData: Map<string, EPGProgram[]>; // Um mapa de ID do canal para a sua programação
-  isLoadingEPG: boolean;
-  loadEpgData: (url: string) => Promise<void>;
-  getProgramForChannel: (channelId: string) => { now?: EPGProgram, next?: EPGProgram };
+  epgData: EPGProgram[];
+  isLoading: boolean;
+  loadEpgData: (url: string | null) => Promise<void>;
 }
 
-const EPGContext = createContext<EPGContextType>({
-  epgData: new Map(),
-  isLoadingEPG: false,
-  loadEpgData: async () => {},
-  getProgramForChannel: () => ({}),
-});
+// Cria o contexto com um valor padrão undefined
+const EPGContext = createContext<EPGContextType | undefined>(undefined);
 
-export const EPGProvider = ({ children }: { children: ReactNode }) => {
-  const [epgData, setEpgData] = useState<Map<string, EPGProgram[]>>(new Map());
-  const [isLoadingEPG, setIsLoadingEPG] = useState(false);
+// Define as props do nosso provider
+interface EPGProviderProps {
+  children: ReactNode;
+}
 
-  const loadEpgData = async (url: string) => {
-    if (!url) return;
-    setIsLoadingEPG(true);
+export const EPGProvider = ({ children }: EPGProviderProps) => {
+  // CORREÇÃO: Inicia com array vazio para evitar erros
+  const [epgData, setEpgData] = useState<EPGProgram[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadEpgData = async (url: string | null) => {
+    if (!url) {
+      console.log('Nenhuma URL de EPG fornecida.');
+      setEpgData([]); // Limpa dados antigos se não houver URL
+      return;
+    }
+
+    console.log(`Iniciando carregamento do EPG de: ${url}`);
+    setIsLoading(true);
     try {
-      const parsedData = await fetchAndParseXMLTV(url);
-      setEpgData(parsedData);
+      const programmes = await fetchAndParseXMLTV(url);
+      setEpgData(programmes);
+      console.log(`${programmes.length} programas do EPG foram carregados com sucesso.`);
     } catch (error) {
-      console.error("Falha ao carregar dados do EPG:", error);
-      setEpgData(new Map()); // Limpa em caso de erro
+      console.error('Falha ao carregar ou processar o EPG:', error);
+      setEpgData([]); // Garante que epgData seja um array em caso de erro
     } finally {
-      setIsLoadingEPG(false);
+      setIsLoading(false);
     }
-  };
-
-  const getProgramForChannel = (channelId: string) => {
-    const programs = epgData.get(channelId);
-    if (!programs) return {};
-
-    const now = new Date();
-    const nowTimestamp = now.getTime();
-    
-    let currentProgram: EPGProgram | undefined;
-    let nextProgram: EPGProgram | undefined;
-
-    for (let i = 0; i < programs.length; i++) {
-      const prog = programs[i];
-      if (prog.start <= nowTimestamp && prog.stop > nowTimestamp) {
-        currentProgram = prog;
-        if (i + 1 < programs.length) {
-          nextProgram = programs[i + 1];
-        }
-        break;
-      }
-    }
-    
-    return { now: currentProgram, next: nextProgram };
   };
 
   return (
-    <EPGContext.Provider value={{ epgData, isLoadingEPG, loadEpgData, getProgramForChannel }}>
+    <EPGContext.Provider value={{ epgData, isLoading, loadEpgData }}>
       {children}
     </EPGContext.Provider>
   );
 };
 
-export const useEPG = () => useContext(EPGContext);
+// Hook customizado para usar o contexto do EPG
+export const useEPG = () => {
+  const context = useContext(EPGContext);
+  // CORREÇÃO: Retorna o contexto inteiro
+  if (context === undefined) {
+    throw new Error('useEPG deve ser usado dentro de um EPGProvider');
+  }
+  return context;
+};
