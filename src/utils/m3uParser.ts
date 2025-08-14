@@ -1,6 +1,3 @@
-// Não precisamos mais da biblioteca 'm3u-parser'
-// import M3uParser from 'm3u-parser';
-
 // Função para extrair um atributo como: tvg-name="..."
 function getAttribute(line: string, attributeName: string): string {
   const regex = new RegExp(`${attributeName}="([^"]*)"`, 'i');
@@ -8,6 +5,7 @@ function getAttribute(line: string, attributeName: string): string {
   return match ? match[1] : '';
 }
 
+// A função agora retornará um objeto com os itens E a URL do EPG
 export const fetchAndParseM3U = async (url: string) => {
   try {
     let correctedUrl = url;
@@ -26,23 +24,25 @@ export const fetchAndParseM3U = async (url: string) => {
     }
     const m3uText = await response.text();
 
-    // --- NOSSO PARSER CUSTOMIZADO ---
     const lines = m3uText.split('\n');
     const items = [];
     let currentItem: any = {};
+    let epgUrl: string | null = null; // 1. Variável para guardar o link do EPG
 
     for (const line of lines) {
       const trimmedLine = line.trim();
+
+      // 2. PROCURA PELO LINK DO EPG NA PRIMEIRA LINHA
+      if (trimmedLine.startsWith('#EXTM3U')) {
+        epgUrl = getAttribute(trimmedLine, 'x-tvg-url');
+      }
+      
       if (trimmedLine.startsWith('#EXTINF:')) {
-        // Encontramos a linha de informação de um canal
-        currentItem = {}; // Reseta o item atual
-        
+        currentItem = {};
         const groupTitle = getAttribute(trimmedLine, 'group-title');
         const tvgName = getAttribute(trimmedLine, 'tvg-name');
         const tvgLogo = getAttribute(trimmedLine, 'tvg-logo');
         const tvgId = getAttribute(trimmedLine, 'tvg-id');
-
-        // O nome do canal geralmente está depois da última vírgula
         const name = trimmedLine.split(',').pop() || tvgName || 'Título Desconhecido';
 
         currentItem = {
@@ -52,7 +52,6 @@ export const fetchAndParseM3U = async (url: string) => {
           tvg: { id: tvgId, name: tvgName, logo: tvgLogo },
         };
       } else if (trimmedLine && !trimmedLine.startsWith('#')) {
-        // Esta é a linha da URL, que vem logo após a linha #EXTINF
         if (currentItem.name) {
           currentItem.url = trimmedLine;
           items.push(currentItem);
@@ -65,11 +64,13 @@ export const fetchAndParseM3U = async (url: string) => {
       throw new Error('A lista M3U está vazia ou em um formato irreconhecível.');
     }
 
-    return items;
-    // --- FIM DO PARSER CUSTOMIZADO ---
+    // 3. RETORNA OS ITENS E O LINK DO EPG
+    console.log("EPG URL encontrada no arquivo M3U:", epgUrl);
+    return { items, epgUrl };
 
   } catch (error) {
     console.error('Falha ao buscar ou processar o arquivo M3U:', error);
-    return [];
+    // Em caso de erro, retorna a estrutura esperada com valores vazios
+    return { items: [], epgUrl: null };
   }
 };

@@ -3,33 +3,62 @@ import { View, Text, FlatList, StyleSheet, Alert, ActivityIndicator } from 'reac
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
-import { obterPerfis, ListaPerfil, salvarUltimoPerfil } from '../lib/listaStorage';
+import { getPerfis, ListaPerfil, salvarUltimoPerfil } from '../lib/listaStorage'; // Usando suas funções
 import { fetchAndParseM3U } from '../utils/m3uParser';
 import FocusableButton from '../components/FocusableButton';
-import { useContent } from '../context/ChannelContext'; // MUDANÇA AQUI
+import { useContent } from '../context/ChannelContext';
+import { useEPG } from '../context/EPGContext';
 
 type PerfisScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Perfis'>;
 
 export default function PerfisScreen() {
   const [perfis, setPerfis] = useState<ListaPerfil[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingList, setLoadingList] = useState<string | null>(null); // Para o loading individual
+  const [loadingList, setLoadingList] = useState<string | null>(null);
   const navigation = useNavigation<PerfisScreenNavigationProp>();
-  const { setAllContent } = useContent(); // MUDANÇA AQUI: usamos o hook customizado
+  const { setAllContent } = useContent();
+  const { loadEpgData } = useEPG();
 
   useEffect(() => {
     const carregarPerfis = async () => {
-      const perfisSalvos = await obterPerfis();
+      const perfisSalvos = await getPerfis(); // Usando sua função
       setPerfis(perfisSalvos);
       setLoading(false);
     };
-    carregarPerfis();
-  }, []);
+    // Recarrega os perfis quando a tela ganha foco
+    const unsubscribe = navigation.addListener('focus', carregarPerfis);
+    return unsubscribe;
+  }, [navigation]);
 
   const handleSelecionar = async (perfil: ListaPerfil) => {
-    setLoadingList(perfil.id); // Ativa o loading para este perfil
+    if (!perfil.url) {
+        Alert.alert('Erro', 'Este perfil não tem uma URL de lista configurada.');
+        return;
+    }
+
+    setLoadingList(perfil.id);
     try {
-      const items = await fetchAndParseM3U(perfil.url);
+      let finalEpgUrl: string | null = null;
+
+      // ---- A LÓGICA INTELIGENTE COMEÇA AQUI ----
+      try {
+        // Tentamos "desconstruir" o link para encontrar as credenciais.
+        const urlParams = new URL(perfil.url);
+        const username = urlParams.searchParams.get('username');
+        const password = urlParams.searchParams.get('password');
+        const dns = urlParams.hostname + (urlParams.port ? `:${urlParams.port}` : '');
+        
+        // Se encontrarmos as credenciais, construímos o link do EPG.
+        if (dns && username) {
+          finalEpgUrl = `http://${dns}/xmltv.php?username=${username}&password=${password || ''}`;
+          console.log("EPG URL construída a partir do link M3U:", finalEpgUrl);
+        }
+      } catch (e) {
+        console.log("Não foi possível desconstruir a URL. Vamos procurar o EPG dentro do arquivo M3U.");
+      }
+      
+      // Independentemente do resultado acima, processamos o arquivo M3U.
+      const { items, epgUrl: epgUrlFromM3U } = await fetchAndParseM3U(perfil.url);
 
       if (items.length === 0) {
         Alert.alert('Aviso', 'A lista está vazia ou não pôde ser carregada.');
@@ -37,8 +66,12 @@ export default function PerfisScreen() {
         return;
       }
 
-      setAllContent(items); // A nova função que separa tudo
+      setAllContent(items);
       await salvarUltimoPerfil(perfil.id);
+
+      // Carrega o EPG: dá prioridade à URL que construímos. Se não tivermos uma,
+      // usamos a que (talvez) tenhamos encontrado dentro do arquivo M3U.
+      loadEpgData(finalEpgUrl || epgUrlFromM3U);
       
       navigation.reset({
         index: 0,
@@ -46,8 +79,8 @@ export default function PerfisScreen() {
       });
     } catch (err) {
       console.error("Erro ao carregar a lista:", err);
-      Alert.alert('Erro', 'Não foi possível carregar a lista. Verifique a URL e sua conexão.');
-      setLoadingList(null); // Desativa o loading em caso de erro
+      Alert.alert('Erro', 'Não foi possível carregar a lista. Verifique os dados e sua conexão.');
+      setLoadingList(null);
     }
   };
 
