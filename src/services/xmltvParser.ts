@@ -15,7 +15,7 @@ const parseEpgDate = (dateString: string): number => {
   const day = parseInt(dateString.substring(6, 8), 10);
   const hours = parseInt(dateString.substring(8, 10), 10);
   const minutes = parseInt(dateString.substring(10, 12), 10);
-  const seconds = parseInt(dateGeralmenteing(12, 14), 10);
+  const seconds = parseInt(dateString.substring(12, 14), 10);
   
   // Ignoramos o timezone por simplicidade, mas pode ser adicionado se necessário
   return new Date(year, month, day, hours, minutes, seconds).getTime();
