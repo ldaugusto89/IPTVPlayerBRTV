@@ -1,77 +1,122 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
+import { useContent } from '../context/ChannelContext';
 import Sidebar from '../components/Sidebar';
-import ContentRow from '../components/ContentRow';
-import { useContent, M3UItem } from '../context/ChannelContext';
-import { useFavorites } from '../context/FavoritesContext';
-import { useHistory } from '../context/HistoryContext';
+import { getVodStreams, getSeries, getLiveCategories, getVodCategories, getSeriesCategories } from '../services/xtreamService';
+import ContentMediaRow from '../components/ContentMediaRow';
+import ContentChannelRow from '../components/ContentChannelRow';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
-// Reutilizamos a função para extrair o nome base da série
-const getSeriesBaseName = (name: string) => name.split(/ S\d{1,2}E\d{1,2}/i)[0].trim();
-
-export default function HomeScreen() {
+const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { channels, movies, series, isLoading } = useContent();
-  const { favorites } = useFavorites();
-  const { history } = useHistory();
+  const { 
+    serverInfo, 
+    allMovies, setAllMovies, 
+    allSeries, setAllSeries,
+    liveCategories, setLiveCategories,
+    setVodCategories,
+    setSeriesCategories,
+    isLoading, setIsLoading
+  } = useContent();
 
-  // CRIA UMA LISTA DE SÉRIES ÚNICAS PARA A HOME
-  const uniqueSeriesForHome = useMemo(() => {
-    const seriesMap = new Map<string, M3UItem>();
-    series.forEach(item => {
-      const baseName = getSeriesBaseName(item.name);
-      if (!seriesMap.has(baseName)) {
-        seriesMap.set(baseName, item);
+  useEffect(() => {
+    const fetchAllContent = async () => {
+      if (!serverInfo) return;
+
+      // Só busca tudo se as listas estiverem vazias, para evitar recarregar
+      if (allMovies.length > 0 || allSeries.length > 0) {
+        setIsLoading(false);
+        return;
       }
-    });
-    return Array.from(seriesMap.values());
-  }, [series]);
 
-  // CRIA UMA LISTA DE FILMES ÚNICOS PARA A HOME
-  const uniqueMoviesForHome = useMemo(() => {
-    const movieMap = new Map<string, M3UItem>();
-    movies.forEach(item => {
-      if (!movieMap.has(item.name)) {
-        movieMap.set(item.name, item);
+      setIsLoading(true);
+      try {
+        console.log("Buscando todo o conteúdo para o app...");
+        const [movies, series, liveCat, vodCat, seriesCat] = await Promise.all([
+          getVodStreams(serverInfo),
+          getSeries(serverInfo),
+          getLiveCategories(serverInfo),
+          getVodCategories(serverInfo),
+          getSeriesCategories(serverInfo)
+        ]);
+        
+        setAllMovies(Array.isArray(movies) ? movies : []);
+        setAllSeries(Array.isArray(series) ? series : []);
+        setLiveCategories(Array.isArray(liveCat) ? liveCat : []);
+        setVodCategories(Array.isArray(vodCat) ? vodCat : []);
+        setSeriesCategories(Array.isArray(seriesCat) ? seriesCat : []);
+        console.log("Conteúdo completo carregado!");
+
+      } catch (error) {
+        console.error("Erro ao buscar todo o conteúdo:", error);
+      } finally {
+        setIsLoading(false);
       }
-    });
-    return Array.from(movieMap.values());
-  }, [movies]);
+    };
 
-  const navigateToCategory = (category: 'Canais' | 'Filmes' | 'Series') => {
-    navigation.navigate(category);
-  };
+    fetchAllContent();
+  }, [serverInfo]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Sidebar navigation={navigation} />
+        <View style={styles.content}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Carregando conteúdo do seu provedor...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Sidebar navigation={navigation} />
-      <ScrollView style={styles.contentContainer}>
-        {isLoading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#fff" />
-          </View>
-        ) : (
-          <>
-            <ContentRow title="Continuar Assistindo" data={history} type="channel" />
-            <ContentRow title="Favoritos" data={favorites} type="channel" />
-            <ContentRow title="Canais" data={channels.slice(0, 20)} type="channel" onSeeAll={() => navigateToCategory('Canais')} />
-            {/* USA AS NOVAS LISTAS ÚNICAS */}
-            <ContentRow title="Filmes" data={uniqueMoviesForHome.slice(0, 20)} type="movie" onSeeAll={() => navigateToCategory('Filmes')} />
-            <ContentRow title="Séries" data={uniqueSeriesForHome.slice(0, 20)} type="series" onSeeAll={() => navigateToCategory('Series')} />
-          </>
+      <ScrollView style={styles.content}>
+        <Text style={styles.screenTitle}>Início</Text>
+        
+        {liveCategories.length > 0 && (
+           <ContentChannelRow 
+             title="Canais" 
+             items={liveCategories.slice(0, 10)}
+             navigation={navigation}
+             seeAllScreen="Channels"
+           />
         )}
+
+        {allMovies.length > 0 && (
+           <ContentMediaRow 
+             title="Filmes" 
+             items={allMovies.slice(0, 10)}
+             navigation={navigation}
+             seeAllScreen="Movies"
+           />
+        )}
+
+        {allSeries.length > 0 && (
+           <ContentMediaRow 
+             title="Séries" 
+             items={allSeries.slice(0, 10)}
+             navigation={navigation}
+             seeAllScreen="Series"
+           />
+        )}
+
       </ScrollView>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
-  contentContainer: { flex: 1, paddingTop: 20, paddingLeft: 10 },
-  loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loaderContainer: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
+  content: { flex: 1, paddingLeft: 10, justifyContent: 'center', alignItems: 'center' },
+  screenTitle: { color: '#fff', fontSize: 28, fontWeight: 'bold', margin: 20 },
+  loadingText: { color: '#ccc', fontSize: 16, marginTop: 15 },
 });
+
+export default HomeScreen;

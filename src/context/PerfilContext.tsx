@@ -1,47 +1,38 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { ListaPerfil } from '../../@types/navigation';
-import { getPerfis, getUltimoPerfilId, salvarUltimoPerfil } from '../lib/listaStorage';
+import React, { createContext, useState, useContext, ReactNode } from 'react';
+import { ListaPerfil } from '../../@types/navigation'; // Importando a interface
 
-type PerfilContextData = {
-  perfilSelecionado: ListaPerfil | null;
-  setPerfilSelecionado: (perfil: ListaPerfil) => void;
-};
+// Define a forma do nosso contexto
+interface PerfilContextType {
+  perfis: ListaPerfil[];
+  setPerfis: React.Dispatch<React.SetStateAction<ListaPerfil[]>>;
+  activeProfile: ListaPerfil | null; // <-- NOVO: Perfil ativo
+  setActiveProfile: (perfil: ListaPerfil | null) => void; // <-- NOVO: Função para definir o perfil ativo
+}
 
-const PerfilContext = createContext<PerfilContextData>({
-  perfilSelecionado: null,
-  setPerfilSelecionado: () => {},
-});
+// Cria o contexto
+const PerfilContext = createContext<PerfilContextType | undefined>(undefined);
 
-export const PerfilProvider = ({ children }: { children: React.ReactNode }) => {
-  const [perfilSelecionado, setPerfilSelecionadoState] = useState<ListaPerfil | null>(null);
+// Define as props do nosso provider
+interface PerfilProviderProps {
+  children: ReactNode;
+}
 
-  useEffect(() => {
-    async function carregarPerfil() {
-      const ultimoId = await getUltimoPerfilId();
-      if (!ultimoId) return;
-
-      const perfis = await getPerfis();
-      const encontrado = perfis.find(p => p.id === ultimoId);
-      if (encontrado) {
-        setPerfilSelecionadoState(encontrado);
-      }
-    }
-
-    carregarPerfil();
-  }, []);
-
-  const setPerfilSelecionado = (perfil: ListaPerfil) => {
-    setPerfilSelecionadoState(perfil);
-    salvarUltimoPerfil(perfil.id);
-  };
+export const PerfilProvider = ({ children }: PerfilProviderProps) => {
+  const [perfis, setPerfis] = useState<ListaPerfil[]>([]);
+  const [activeProfile, setActiveProfile] = useState<ListaPerfil | null>(null); // <-- NOVO ESTADO
 
   return (
-    <PerfilContext.Provider value={{ perfilSelecionado, setPerfilSelecionado }}>
+    <PerfilContext.Provider value={{ perfis, setPerfis, activeProfile, setActiveProfile }}>
       {children}
     </PerfilContext.Provider>
   );
 };
 
-export function usePerfil() {
-  return useContext(PerfilContext);
-}
+// Hook customizado para usar o contexto
+export const usePerfil = () => {
+  const context = useContext(PerfilContext);
+  if (context === undefined) {
+    throw new Error('usePerfil deve ser usado dentro de um PerfilProvider');
+  }
+  return context;
+};

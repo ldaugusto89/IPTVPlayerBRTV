@@ -1,80 +1,89 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useState, useContext, ReactNode } from 'react';
 
-// A estrutura de um item da lista M3U
-export interface M3UItem {
-  name: string;
-  url: string;
-  logo?: string;
-  group: {
-    title: string;
-  };
-  tvg?: {
-    id: string;
-    name: string;
-    logo: string;
-  };
+// --- Interfaces para a nova arquitetura de API ---
+
+export interface ServerInfo {
+  serverUrl: string;
+  username?: string;
+  password?: string;
 }
 
-// Tipos para o nosso contexto
+export interface ApiCategory {
+  category_id: string;
+  category_name: string;
+  parent_id: number;
+}
+
+export interface VodItem {
+  stream_id: number;
+  name: string;
+  stream_icon: string;
+  rating_5based: number;
+  category_id: string;
+}
+
+export interface SeriesItem {
+  series_id: number;
+  name: string;
+  cover: string;
+  rating_5based: number;
+  category_id: string;
+}
+
+// --- Definição do Contexto ---
+
 interface ChannelContextType {
-  channels: M3UItem[];
-  movies: M3UItem[];
-  series: M3UItem[];
-  setAllContent: (items: M3UItem[]) => void;
+  serverInfo: ServerInfo | null;
+  setServerInfo: (info: ServerInfo | null) => void;
+  
+  // Armazena a lista COMPLETA de filmes e séries
+  allMovies: VodItem[];
+  setAllMovies: (movies: VodItem[]) => void;
+  allSeries: SeriesItem[];
+  setAllSeries: (series: SeriesItem[]) => void;
+
+  // Armazena as listas de categorias
+  liveCategories: ApiCategory[];
+  setLiveCategories: (categories: ApiCategory[]) => void;
+  vodCategories: ApiCategory[];
+  setVodCategories: (categories: ApiCategory[]) => void;
+  seriesCategories: ApiCategory[];
+  setSeriesCategories: (categories: ApiCategory[]) => void;
+
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
 }
 
-// Contexto com valores padrão
-const ChannelContext = createContext<ChannelContextType>({
-  channels: [],
-  movies: [],
-  series: [],
-  setAllContent: () => {},
-  isLoading: true,
-  setIsLoading: () => {},
-});
+const ChannelContext = createContext<ChannelContextType | undefined>(undefined);
 
-// Componente Provedor
 export const ChannelProvider = ({ children }: { children: ReactNode }) => {
-  const [channels, setChannels] = useState<M3UItem[]>([]);
-  const [movies, setMovies] = useState<M3UItem[]>([]);
-  const [series, setSeries] = useState<M3UItem[]>([]);
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+  const [allMovies, setAllMovies] = useState<VodItem[]>([]);
+  const [allSeries, setAllSeries] = useState<SeriesItem[]>([]);
+  const [liveCategories, setLiveCategories] = useState<ApiCategory[]>([]);
+  const [vodCategories, setVodCategories] = useState<ApiCategory[]>([]);
+  const [seriesCategories, setSeriesCategories] = useState<ApiCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Função que recebe a lista completa e a separa em categorias
-  const setAllContent = (items: M3UItem[]) => {
-    setIsLoading(true);
-    const channelsData: M3UItem[] = [];
-    const moviesData: M3UItem[] = [];
-    const seriesData: M3UItem[] = [];
-
-    items.forEach(item => {
-      // AQUI ESTÁ A NOVA LÓGICA: Verificamos a URL do item
-      const url = item.url.toLowerCase();
-
-      if (url.includes('/movie/')) {
-        moviesData.push(item);
-      } else if (url.includes('/series/')) {
-        seriesData.push(item);
-      } else {
-        channelsData.push(item);
-      }
-    });
-
-    setChannels(channelsData);
-    setMovies(moviesData);
-    setSeries(seriesData);
-    setIsLoading(false);
+  const value = {
+    serverInfo, setServerInfo,
+    allMovies, setAllMovies,
+    allSeries, setAllSeries,
+    liveCategories, setLiveCategories,
+    vodCategories, setVodCategories,
+    seriesCategories, setSeriesCategories,
+    isLoading, setIsLoading
   };
 
   return (
-    <ChannelContext.Provider value={{ channels, movies, series, setAllContent, isLoading, setIsLoading }}>
+    <ChannelContext.Provider value={value}>
       {children}
     </ChannelContext.Provider>
   );
 };
 
-// Hook customizado para usar o contexto
-export const useContent = () => useContext(ChannelContext);
+export const useContent = () => {
+  const context = useContext(ChannelContext);
+  if (!context) { throw new Error('useContent must be used within a ChannelProvider'); }
+  return context;
+};

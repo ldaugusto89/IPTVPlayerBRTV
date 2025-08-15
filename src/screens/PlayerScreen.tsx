@@ -1,48 +1,40 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, BackHandler, Pressable, Text } from 'react-native';
-import Video, { OnProgressData } from 'react-native-video';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { PlayerScreenRouteProp, PlayerScreenNavigationProp } from '../../@types/navigation';
-import { useHistory } from '../context/HistoryContext'; // 1. IMPORTE O HOOK DO HISTÓRICO
+import React, { useRef, useState } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import Video from 'react-native-video';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../../@types/navigation';
+
+type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
 
 export default function PlayerScreen() {
   const route = useRoute<PlayerScreenRouteProp>();
-  const navigation = useNavigation<PlayerScreenNavigationProp>();
-  const { url, title, logo } = route.params; // Pegamos os dados do item
-  
-  const { addToHistory } = useHistory(); // 2. PEGUE A FUNÇÃO DO CONTEXTO
-  const hasSavedToHistory = useRef(false); // Ref para controlar o salvamento
+  // LEITURA DE PARÂMETROS CORRIGIDA:
+  const { url, title, logo } = route.params;
 
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      navigation.goBack();
-      return true;
-    });
-    return () => backHandler.remove();
-  }, [navigation]);
-
-  const handleProgress = (data: OnProgressData) => {
-    // Salva no histórico após 30 segundos, e apenas uma vez
-    if (data.currentTime > 30 && !hasSavedToHistory.current) {
-      addToHistory({ name: title, url, logo, group: { title: '' } }); // Salva o item
-      hasSavedToHistory.current = true; // Marca como salvo
-    }
-  };
+  const videoRef = useRef<Video>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   return (
     <View style={styles.container}>
       <Video
-        source={{ uri: url }}
-        style={styles.video}
+        ref={videoRef}
+        source={{ uri: url }} // Usa a URL diretamente
+        style={StyleSheet.absoluteFill}
         controls={true}
         resizeMode="contain"
+        onLoadStart={() => setIsLoading(true)}
+        onLoad={() => setIsLoading(false)}
+        onError={(error) => console.error('Erro no player de vídeo:', error)}
         fullscreen={true}
-        onProgress={handleProgress} // 3. CHAME A FUNÇÃO AQUI
-        onError={(err) => console.log('Erro no player:', err)}
+        fullscreenAutorotate={true}
+        fullscreenOrientation="landscape"
       />
-       <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backText}>← Voltar</Text>
-      </Pressable>
+      {isLoading && (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.titleText}>{title}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -52,19 +44,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'black',
   },
-  video: {
+  loader: {
     ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  backButton: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    padding: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 5,
-  },
-  backText: {
+  titleText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
+    marginTop: 20,
   }
 });

@@ -1,16 +1,17 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { getPerfis, getUltimoPerfilId, salvarUltimoPerfil  } from '../lib/listaStorage';
-import { fetchAndParseM3U, M3UItem } from '../utils/m3uParser';
-import { buildXtreamUrls } from '../utils/buildXtreamUrls';
+import { getPerfis, getUltimoPerfilId, salvarUltimoPerfil } from '../lib/listaStorage';
 import { useContent } from '../context/ChannelContext';
+import { usePerfil } from '../context/PerfilContext';
+import { parseServerInfo } from '../services/xtreamService'; // Importando o novo serviço
 
 export default function InitialScreen() {
   const navigation = useNavigation<any>();
   const { user, loading } = useAuth();
-  const { setAllContent } = useContent();
+  const { setServerInfo } = useContent(); // Usaremos a nova função do contexto
+  const { setActiveProfile } = usePerfil();
 
   useEffect(() => {
     const verificarFluxo = async () => {
@@ -31,32 +32,36 @@ export default function InitialScreen() {
       const perfil = perfis.find(p => p.id === ultimoId) || perfis[0];
       await salvarUltimoPerfil(perfil.id);
 
-      // Gera URL de M3U
-      const { m3u } = buildXtreamUrls(
-        perfil.host || '',
-        perfil.username || '',
-        perfil.password || ''
-      );
-      const urlFinal = perfil.tipo === 'url' ? perfil.url! : m3u;
-
       try {
-        const canais: M3UItem[] = await fetchAndParseM3U(urlFinal);
-        setAllContent(canais);
+        // --- NOVA LÓGICA DE API ---
+        // 1. Monta a URL completa, assim como a tela de perfis faz
+        const url = perfil.tipo === 'url' 
+          ? perfil.url! 
+          : `http://${perfil.host}/get.php?username=${perfil.username}&password=${perfil.password}&type=m3u_plus`;
 
-        if (canais.length > 0) {
+        // 2. Extrai as informações do servidor
+        const serverInfo = parseServerInfo(url);
+
+        if (serverInfo) {
+          console.log("InitialScreen: Informações do servidor extraídas com sucesso.");
+          // 3. Salva as informações no contexto
+          setServerInfo(serverInfo);
+          setActiveProfile(perfil);
+          // 4. Navega para a Home, que agora terá as informações para buscar o conteúdo
           navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         } else {
-          Alert.alert('Lista vazia ou inválida');
-          navigation.reset({ index: 0, routes: [{ name: 'Perfis' }] });
+          throw new Error("Não foi possível extrair informações do servidor do perfil salvo.");
         }
-      } catch (err) {
-        console.warn('Erro ao carregar lista:', err);
+      } catch (err: any) {
+        console.warn('Erro ao carregar perfil na InitialScreen:', err.message);
+        // Em caso de erro, o melhor é ir para a seleção de perfis
         navigation.reset({ index: 0, routes: [{ name: 'Perfis' }] });
       }
     };
 
     verificarFluxo();
-  }, [user, loading]);
+  // Adicionamos as novas dependências ao array
+  }, [user, loading, navigation, setServerInfo, setActiveProfile]);
 
 
   return (

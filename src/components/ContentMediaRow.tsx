@@ -6,20 +6,18 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
 import { useContent } from '../context/ChannelContext';
 
-type ContentRowNavigationProp = StackNavigationProp<RootStackParamList>;
-
-// O tipo dos itens agora pode ser VodItem OU SeriesItem
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 type ItemType = VodItem | SeriesItem;
 
-interface ContentRowProps {
+interface ContentMediaRowProps {
   title: string;
   items: ItemType[];
-  navigation: ContentRowNavigationProp;
-  seeAllScreen?: keyof RootStackParamList; 
+  navigation: NavigationProp;
+  seeAllScreen?: keyof RootStackParamList;
 }
 
-const ContentRow = ({ title, items, navigation, seeAllScreen }: ContentRowProps) => {
-  const { serverInfo } = useContent(); // Pegamos o serverInfo para construir as URLs
+const ContentMediaRow = ({ title, items, navigation, seeAllScreen }: ContentMediaRowProps) => {
+  const { serverInfo } = useContent();
 
   if (!items || items.length === 0) {
     return null;
@@ -28,35 +26,21 @@ const ContentRow = ({ title, items, navigation, seeAllScreen }: ContentRowProps)
   const handlePress = (item: ItemType) => {
     if (!serverInfo) return;
 
-    // Verifica se o item é um FILME (VodItem)
-    if ('stream_id' in item) {
-      // Constrói a URL de reprodução para filmes
+    if ('stream_id' in item) { // É um filme
       const streamUrl = `${serverInfo.serverUrl.replace('/player_api.php', '')}/movie/${serverInfo.username}/${serverInfo.password}/${item.stream_id}.mp4`;
-      
-      // Navega para o Player, adaptando o formato do item
       navigation.navigate('Player', { 
-        channel: {
-          name: item.name,
-          url: streamUrl,
-          logo: item.stream_icon,
-          group: { title: 'Filmes' }
-        }
+        channel: { name: item.name, url: streamUrl, logo: item.stream_icon, group: { title: 'Filmes' } }
       });
-    } 
-    // Verifica se o item é uma SÉRIE (SeriesItem)
-    else if ('series_id' in item) {
-      // Navega para a tela de detalhes da série
+    } else if ('series_id' in item) { // É uma série
       navigation.navigate('SeriesDetail', { seriesId: String(item.series_id) });
     }
   };
 
   const renderItem = ({ item }: { item: ItemType }) => {
     let imageUrl: string | undefined;
-    let name: string = item.name;
-
-    if ('stream_icon' in item) { // É um filme
+    if ('stream_icon' in item) {
       imageUrl = item.stream_icon;
-    } else if ('cover' in item) { // É uma série
+    } else if ('cover' in item) {
       imageUrl = item.cover;
     }
 
@@ -68,7 +52,7 @@ const ContentRow = ({ title, items, navigation, seeAllScreen }: ContentRowProps)
           defaultSource={require('../assets/placeholder.png')}
         />
         <View style={styles.titleContainer}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{name}</Text>
+          <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
         </View>
       </FocusableButton>
     );
@@ -97,43 +81,14 @@ const ContentRow = ({ title, items, navigation, seeAllScreen }: ContentRowProps)
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
-  },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 10, marginRight: 20, marginBottom: 10 },
-  title: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 10,
-    marginBottom: 10,
-  },
-  seeAll: { color: '#1e90ff', fontSize: 16, fontWeight: 'bold' },
-  card: {
-    width: 150,
-    height: 220, // Retangular, melhor para pôsteres
-    marginHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: '#282828',
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: '100%',
-    height: '75%',
-    resizeMode: 'cover',
-    backgroundColor: '#1f1f1f',
-  },
-  titleContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 14,
-    textAlign: 'center',
-  },
+    container: { marginBottom: 20 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 10, marginRight: 20, marginBottom: 10 },
+    title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+    seeAll: { color: '#1e90ff', fontSize: 16, fontWeight: 'bold' },
+    card: { width: 150, height: 220, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', overflow: 'hidden' },
+    cardImage: { width: '100%', height: '75%', resizeMode: 'cover', backgroundColor: '#1f1f1f' },
+    titleContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
+    cardTitle: { color: '#fff', fontSize: 14, textAlign: 'center' },
 });
 
-export default ContentRow;
+export default ContentMediaRow;

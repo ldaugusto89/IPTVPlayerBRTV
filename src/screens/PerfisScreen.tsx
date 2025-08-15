@@ -3,11 +3,10 @@ import { View, Text, FlatList, StyleSheet, Alert, ActivityIndicator } from 'reac
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
-import { getPerfis, ListaPerfil, salvarUltimoPerfil } from '../lib/listaStorage'; // Usando suas funções
-import { fetchAndParseM3U } from '../utils/m3uParser';
+import { getPerfis, ListaPerfil, salvarUltimoPerfil } from '../lib/listaStorage';
 import FocusableButton from '../components/FocusableButton';
 import { useContent } from '../context/ChannelContext';
-import { useEPG } from '../context/EPGContext';
+import { usePerfil } from '../context/PerfilContext';
 
 type PerfisScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Perfis'>;
 
@@ -16,70 +15,61 @@ export default function PerfisScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingList, setLoadingList] = useState<string | null>(null);
   const navigation = useNavigation<PerfisScreenNavigationProp>();
-  const { setAllContent } = useContent();
-  const { loadEpgData } = useEPG();
+  const { setServerInfo } = useContent();
+  const { activeProfile, setActiveProfile } = usePerfil();
 
   useEffect(() => {
     const carregarPerfis = async () => {
-      const perfisSalvos = await getPerfis(); // Usando sua função
+      const perfisSalvos = await getPerfis();
       setPerfis(perfisSalvos);
       setLoading(false);
     };
-    // Recarrega os perfis quando a tela ganha foco
     const unsubscribe = navigation.addListener('focus', carregarPerfis);
     return unsubscribe;
   }, [navigation]);
 
   const handleSelecionar = async (perfil: ListaPerfil) => {
-    if (!perfil.url) {
-        Alert.alert('Erro', 'Este perfil não tem uma URL de lista configurada.');
-        return;
+    // A lógica para evitar recarregamento desnecessário continua válida
+    if (activeProfile && perfil.id === activeProfile.id) {
+      console.log('Perfil já ativo. Navegando para a Home.');
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      return;
     }
 
     setLoadingList(perfil.id);
     try {
-      let finalEpgUrl: string | null = null;
-
-      // ---- A LÓGICA INTELIGENTE COMEÇA AQUI ----
-      try {
-        // Tentamos "desconstruir" o link para encontrar as credenciais.
-        const urlParams = new URL(perfil.url);
-        const username = urlParams.searchParams.get('username');
-        const password = urlParams.searchParams.get('password');
-        const dns = urlParams.hostname + (urlParams.port ? `:${urlParams.port}` : '');
-        
-        // Se encontrarmos as credenciais, construímos o link do EPG.
-        if (dns && username) {
-          finalEpgUrl = `http://${dns}/xmltv.php?username=${username}&password=${password || ''}`;
-          console.log("EPG URL construída a partir do link M3U:", finalEpgUrl);
-        }
-      } catch (e) {
-        console.log("Não foi possível desconstruir a URL. Vamos procurar o EPG dentro do arquivo M3U.");
-      }
+      // Extrai as informações de login da URL do perfil
+      const url = perfil.tipo === 'url' ? perfil.url! : `http://${perfil.host}/get.php?username=${perfil.username}&password=${perfil.password}&type=m3u_plus`;
       
-      // Independentemente do resultado acima, processamos o arquivo M3U.
-      const { items, epgUrl: epgUrlFromM3U } = await fetchAndParseM3U(perfil.url);
+      const regex = /^(https?:\/\/[^/]+)\/.*?[?&]username=([^&]+)&password=([^&]+)/;
+      const match = url.match(regex);
 
-      if (items.length === 0) {
-        Alert.alert('Aviso', 'A lista está vazia ou não pôde ser carregada.');
-        setLoadingList(null);
-        return;
+      if (!match) {
+        throw new Error("URL do perfil em formato inválido. Verifique os dados do perfil.");
       }
 
-      setAllContent(items);
+      const serverInfo = {
+        serverUrl: `${match[1]}/player_api.php`,
+        username: match[2],
+        password: match[3],
+      };
+      
+      console.log("Informações do servidor extraídas com sucesso:", serverInfo);
+      
+      // Salva as informações no contexto para serem usadas em outras telas
+      setServerInfo(serverInfo);
+      setActiveProfile(perfil);
       await salvarUltimoPerfil(perfil.id);
-
-      // Carrega o EPG: dá prioridade à URL que construímos. Se não tivermos uma,
-      // usamos a que (talvez) tenhamos encontrado dentro do arquivo M3U.
-      loadEpgData(finalEpgUrl || epgUrlFromM3U);
       
+      // Navega para a Home. O conteúdo será carregado sob demanda lá.
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
       });
-    } catch (err) {
-      console.error("Erro ao carregar a lista:", err);
-      Alert.alert('Erro', 'Não foi possível carregar a lista. Verifique os dados e sua conexão.');
+
+    } catch (err: any) {
+      console.error("Erro ao selecionar o perfil:", err);
+      Alert.alert('Erro', err.message || 'Não foi possível carregar o perfil.');
       setLoadingList(null);
     }
   };
@@ -122,53 +112,13 @@ export default function PerfisScreen() {
 }
 
 const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#141414',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#141414',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 32,
-    color: 'white',
-    marginBottom: 50,
-  },
-  perfilContainer: {
-    alignItems: 'center',
-    margin: 20,
-  },
-  perfilButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 10,
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  perfilInitial: {
-    fontSize: 60,
-    color: 'white',
-  },
-  perfilName: {
-    color: 'white',
-    marginTop: 10,
-    fontSize: 18,
-  },
-  addButton: {
-    marginTop: 40,
-    paddingVertical: 10,
-    paddingHorizontal: 30,
-    borderWidth: 1,
-    borderColor: '#888',
-  },
-  addButtonText: {
-    color: '#888',
-    fontSize: 16,
-  },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#141414' },
+  container: { flex: 1, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 32, color: 'white', marginBottom: 50 },
+  perfilContainer: { alignItems: 'center', margin: 20 },
+  perfilButton: { width: 120, height: 120, borderRadius: 10, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' },
+  perfilInitial: { fontSize: 60, color: 'white' },
+  perfilName: { color: 'white', marginTop: 10, fontSize: 18 },
+  addButton: { marginTop: 40, paddingVertical: 10, paddingHorizontal: 30, borderWidth: 1, borderColor: '#888' },
+  addButtonText: { color: '#888', fontSize: 16 },
 });

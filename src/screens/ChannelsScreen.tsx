@@ -1,49 +1,105 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, SectionList, FlatList, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SectionList, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
-import { useContent, M3UItem } from '../context/ChannelContext';
+import { useContent, ApiCategory } from '../context/ChannelContext';
 import FocusableButton from '../components/FocusableButton';
-import { useFavorites } from '../context/FavoritesContext';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import Sidebar from '../components/Sidebar';
+import { getLiveCategories, getLiveStreams } from '../services/xtreamService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
+interface LiveStream {
+  stream_id: number;
+  name: string;
+  stream_icon: string;
+  epg_channel_id: string;
+}
+
 interface ChannelSection {
   title: string;
-  data: M3UItem[][];
+  data: LiveStream[];
+  id: string;
 }
 
 export default function ChannelsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { channels, isLoading } = useContent();
-  const { toggleFavorite, isFavorite } = useFavorites();
+  const { serverInfo, liveCategories, setLiveCategories } = useContent();
+  const [isLoading, setIsLoading] = useState(true);
+  const [sections, setSections] = useState<ChannelSection[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
-  const channelSections = useMemo(() => {
-    if (isLoading) return [];
-
-    const grouped: { [key: string]: M3UItem[] } = channels.reduce((acc, channel) => {
-      // LÓGICA DE AGRUPAMENTO CORRIGIDA:
-      // Tenta ler channel.group.title, se não der, tenta channel.group, e por último 'Outros'.
-      const groupTitle = (channel.group as any)?.title || channel.group || 'Outros';
+  useEffect(() => {
+    const fetchCategories = async () => {
+      if (!serverInfo) return;
       
-      if (!acc[groupTitle]) {
-        acc[groupTitle] = [];
+      setIsLoading(true);
+      try {
+        const categories = liveCategories.length > 0 ? liveCategories : await getLiveCategories(serverInfo);
+        if (liveCategories.length === 0) {
+          setLiveCategories(categories || []);
+        }
+        
+        const formattedSections = (categories || []).map((cat: ApiCategory) => ({
+          title: cat.category_name,
+          id: cat.category_id,
+          data: [],
+        }));
+        setSections(formattedSections);
+      } catch (error) {
+        console.error("Erro ao buscar categorias de canais:", error);
+      } finally {
+        setIsLoading(false);
       }
-      acc[groupTitle].push(channel);
-      return acc;
-    }, {} as { [key: string]: M3UItem[] });
+    };
 
-    return Object.keys(grouped).map(title => ({
-      title,
-      data: [grouped[title]],
-    }));
-  }, [channels, isLoading]);
+    fetchCategories();
+  }, [serverInfo, liveCategories]);
 
-  const handlePress = (item: M3UItem) => {
-    navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo || item.logo });
+  const toggleSection = async (sectionId: string) => {
+    const newExpandedSections = new Set(expandedSections);
+    if (newExpandedSections.has(sectionId)) {
+      newExpandedSections.delete(sectionId);
+      setExpandedSections(newExpandedSections);
+      return;
+    }
+
+    newExpandedSections.add(sectionId);
+    setExpandedSections(newExpandedSections);
+
+    const currentSection = sections.find(s => s.id === sectionId);
+    if (currentSection && currentSection.data.length > 0) {
+      return;
+    }
+
+    if (serverInfo) {
+      try {
+        const streams = await getLiveStreams(serverInfo, sectionId);
+        setSections(prevSections =>
+          prevSections.map(s =>
+            s.id === sectionId ? { ...s, data: streams || [] } : s
+          )
+        );
+      } catch (error) {
+        console.error(`Erro ao buscar canais para a categoria ${sectionId}:`, error);
+      }
+    }
+  };
+  
+  const handlePress = (item: LiveStream) => {
+    if (!serverInfo) return;
+    
+    const baseUrl = serverInfo.serverUrl.replace('/player_api.php', '');
+    const streamUrl = `${baseUrl}/${serverInfo.username}/${serverInfo.password}/${item.stream_id}.ts`;
+    console.log(`[Player] Navegando com a URL: ${streamUrl}`);
+
+    // NAVEGAÇÃO CORRIGIDA: Passa os parâmetros de forma individual
+    navigation.navigate('Player', { 
+      url: streamUrl,
+      title: item.name,
+      logo: item.stream_icon
+    });
   };
 
   if (isLoading) {
@@ -60,41 +116,40 @@ export default function ChannelsScreen() {
       <View style={styles.content}>
         <Text style={styles.screenTitle}>Canais</Text>
         <SectionList
-          sections={channelSections}
-          keyExtractor={(item, index) => item[0]?.url + index}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={styles.sectionHeader}>{title}</Text>
+          sections={sections}
+          keyExtractor={(item, index) => `${item.stream_id}-${index}`}
+          renderSectionHeader={({ section }) => (
+            <TouchableOpacity onPress={() => toggleSection(section.id)}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                <Text style={styles.sectionHeaderText}>
+                  {expandedSections.has(section.id) ? '−' : '+'}
+                </Text>
+              </View>
+            </TouchableOpacity>
           )}
-          renderItem={({ item: channelGroup }) => (
-            <FlatList
-              horizontal
-              data={channelGroup}
-              keyExtractor={(channel) => channel.url}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 15 }}
-              renderItem={({ item: channel }) => (
-                <FocusableButton
-                  onPress={() => handlePress(channel)}
-                  onLongPress={() => toggleFavorite(channel)}
-                  style={styles.card}
-                >
-                  <View style={styles.imageContainer}>
-                    <Image
-                      style={styles.cardImage}
-                      source={{ uri: channel.tvg?.logo || channel.logo }}
-                      defaultSource={require('../assets/placeholder.png')}
-                    />
+          renderItem={({ item, section }) => {
+            if (!expandedSections.has(section.id)) {
+              return null;
+            }
+            return (
+              <FocusableButton
+                style={styles.channelButton}
+                onPress={() => handlePress(item)}
+              >
+                <View style={styles.channelContent}>
+                  <Image
+                    source={{ uri: item.stream_icon }}
+                    style={styles.logo}
+                    defaultSource={require('../assets/placeholder.png')}
+                  />
+                  <View style={styles.textContainer}>
+                    <Text style={styles.channelName} numberOfLines={1}>{item.name}</Text>
                   </View>
-                  <View style={styles.titleContainer}>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{channel.name}</Text>
-                  </View>
-                  {isFavorite(channel) && (
-                    <Ionicons name="star" color="#FFD700" size={18} style={styles.starIcon} />
-                  )}
-                </FocusableButton>
-              )}
-            />
-          )}
+                </View>
+              </FocusableButton>
+            );
+          }}
         />
       </View>
     </View>
@@ -124,45 +179,45 @@ const styles = StyleSheet.create({
     margin: 20,
   },
   sectionHeader: {
-    color: '#fff',
+    backgroundColor: '#101010',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#2F2F2F',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sectionHeaderText: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginLeft: 10,
-    marginBottom: 5,
+    color: '#FFFFFF',
   },
-  // --- NOVOS ESTILOS PARA O CARD ---
-  card: {
-    width: 150, // Um pouco mais largo
-    height: 150, // Quadrado para melhor acomodar logo + título
-    marginHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: '#282828',
-    overflow: 'hidden',
+  channelButton: {
+    backgroundColor: '#1a1a1a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2F2F2F',
   },
-  imageContainer: {
-    flex: 3, // Ocupa 3/4 do espaço
-    justifyContent: 'center',
+  channelContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 15,
+    paddingLeft: 25,
   },
-  cardImage: {
-    width: '80%',
-    height: '80%',
-    resizeMode: 'contain', // Garante que o logo não seja cortado
+  logo: {
+    width: 60,
+    height: 60,
+    resizeMode: 'contain',
+    marginRight: 15,
+    backgroundColor: '#000',
   },
-  titleContainer: {
-    flex: 1, // Ocupa 1/4 do espaço
+  textContainer: {
+    flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 5,
-    backgroundColor: '#1f1f1f',
   },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  starIcon: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+  channelName: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

@@ -2,25 +2,22 @@ import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 export type RootStackParamList = {
+  Initial: undefined;
   Login: undefined;
   Home: undefined;
   Perfis: undefined;
-  PerfilForm: { perfil?: ListaPerfil } | undefined;
-  Canais: undefined;
-  Filmes: undefined;
-  Series: undefined;
+  PerfilForm: { id?: string };
+  // A tela Player agora recebe o objeto 'channel' inteiro
+  Player: { channel: M3UItem }; 
+  
+  // Telas de conteúdo agora recebem o ID e o nome da categoria
+  Channels: { categoryId: string; categoryName: string };
+  Movies: { categoryId: string; categoryName: string };
+  Series: { categoryId: string; categoryName: string };
+
   Favorites: undefined;
-  Initial: undefined;
-  Player: { url: string; title: string };
-  SeriesDetail: {
-    seriesName: string;
-    seriesLogo?: string;
-  };
-  CategoryDetail: {
-    title: string;
-    items: M3UItem[];
-    type: 'movie' | 'series';
-  };
+  CategoryDetail: { category: string };
+  SeriesDetail: { seriesId: string };
 };
 
 export type ListaPerfil = {

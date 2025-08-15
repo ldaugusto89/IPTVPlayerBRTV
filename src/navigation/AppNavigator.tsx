@@ -29,8 +29,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Perfis" component={PerfisScreen} />
         <Stack.Screen name="PerfilForm" component={PerfilForm} />
         <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Canais" component={ChannelsScreen} />
-        <Stack.Screen name="Filmes" component={MoviesScreen} />
+        <Stack.Screen name="Channels" component={ChannelsScreen} />
+        <Stack.Screen name="Movies" component={MoviesScreen} />
         <Stack.Screen name="Series" component={SeriesScreen} />
         <Stack.Screen name="Favorites" component={FavoritesScreen} />
         <Stack.Screen name="Player" component={PlayerScreen} />
