@@ -96,7 +96,7 @@ export default function ChannelsScreen() {
 
     // NAVEGAÇÃO CORRIGIDA: Passa os parâmetros de forma individual
     navigation.navigate('Player', { 
-      url: streamUrl,
+      videoUrl: streamUrl,
       title: item.name,
       logo: item.stream_icon
     });

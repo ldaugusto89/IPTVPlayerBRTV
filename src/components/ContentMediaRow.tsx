@@ -1,61 +1,70 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import FocusableButton from './FocusableButton';
-import { VodItem, SeriesItem } from '../context/ChannelContext';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+} from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
 import { useContent } from '../context/ChannelContext';
+import { buildVideoUrl } from '../utils/buildXtreamUrls'; // Importar a função de construção de URL
 
-type NavigationProp = StackNavigationProp<RootStackParamList>;
-type ItemType = VodItem | SeriesItem;
-
+// Define os tipos de props que o componente pode receber
 interface ContentMediaRowProps {
   title: string;
-  items: ItemType[];
-  navigation: NavigationProp;
-  seeAllScreen?: keyof RootStackParamList;
+  items: any[];
+  navigation: StackNavigationProp<RootStackParamList>;
+  seeAllScreen?: keyof RootStackParamList; // Nome da tela para "Ver Todos"
+  categoryId?: string; // ID da categoria para passar na navegação
+  type?: 'movie' | 'series'; // Adiciona o tipo para a navegação de detalhes
 }
 
-const ContentMediaRow = ({ title, items, navigation, seeAllScreen }: ContentMediaRowProps) => {
-  const { serverInfo } = useContent();
+const ContentMediaRow: React.FC<ContentMediaRowProps> = ({
+  title,
+  items,
+  navigation,
+  seeAllScreen,
+  categoryId,
+  type,
+}) => {
+  const { serverInfo } = useContent(); // Acessa as informações do servidor
 
   if (!items || items.length === 0) {
     return null;
   }
 
-  const handlePress = (item: ItemType) => {
-    if (!serverInfo) return;
-
-    if ('stream_id' in item) { // É um filme
-      const streamUrl = `${serverInfo.serverUrl.replace('/player_api.php', '')}/movie/${serverInfo.username}/${serverInfo.password}/${item.stream_id}.mp4`;
-      navigation.navigate('Player', { 
-        channel: { name: item.name, url: streamUrl, logo: item.stream_icon, group: { title: 'Filmes' } }
+  const handleSeeAllPress = () => {
+    if (!seeAllScreen) return;
+    if (categoryId && type) {
+      navigation.navigate(seeAllScreen, {
+        categoryId: categoryId,
+        title: title,
+        type: type,
       });
-    } else if ('series_id' in item) { // É uma série
-      navigation.navigate('SeriesDetail', { seriesId: String(item.series_id) });
+    } else {
+      navigation.navigate(seeAllScreen);
     }
   };
 
-  const renderItem = ({ item }: { item: ItemType }) => {
-    let imageUrl: string | undefined;
-    if ('stream_icon' in item) {
-      imageUrl = item.stream_icon;
-    } else if ('cover' in item) {
-      imageUrl = item.cover;
-    }
+  // Função para lidar com o clique em um item (filme ou série)
+  const handleItemPress = (item: any) => {
+    const itemType = type || (item.series_id ? 'series' : 'movie');
 
-    return (
-      <FocusableButton onPress={() => handlePress(item)} style={styles.card}>
-        <Image
-          style={styles.cardImage}
-          source={{ uri: imageUrl }}
-          defaultSource={require('../assets/placeholder.png')}
-        />
-        <View style={styles.titleContainer}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
-        </View>
-      </FocusableButton>
-    );
+    if (itemType === 'series') {
+      navigation.navigate('SeriesDetail', { seriesId: item.series_id });
+    } else if (itemType === 'movie' && serverInfo) {
+      // Constrói a URL do vídeo para o player
+      const videoUrl = buildVideoUrl(serverInfo, item.stream_id, 'movie');
+      if (videoUrl) {
+        navigation.navigate('Player', {
+          videoUrl: videoUrl,
+          title: item.name,
+        });
+      }
+    }
   };
 
   return (
@@ -63,32 +72,61 @@ const ContentMediaRow = ({ title, items, navigation, seeAllScreen }: ContentMedi
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {seeAllScreen && (
-          <TouchableOpacity onPress={() => navigation.navigate(seeAllScreen as any)}>
-            <Text style={styles.seeAll}>Ver Todos</Text>
+          <TouchableOpacity onPress={handleSeeAllPress}>
+            <Text style={styles.seeAllText}>Ver Todos</Text>
           </TouchableOpacity>
         )}
       </View>
       <FlatList
-        horizontal
         data={items}
-        renderItem={renderItem}
-        keyExtractor={(item) => String('stream_id' in item ? item.stream_id : item.series_id)}
+        keyExtractor={item =>
+          (item.stream_id || item.series_id).toString()
+        }
+        horizontal
+        renderItem={({ item }) => (
+          // Adiciona o onPress ao TouchableOpacity do item
+          <TouchableOpacity onPress={() => handleItemPress(item)}>
+            <Image
+              source={{ uri: item.stream_icon || item.cover }}
+              style={styles.poster}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        )}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingVertical: 10 }}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-    container: { marginBottom: 20 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 10, marginRight: 20, marginBottom: 10 },
-    title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-    seeAll: { color: '#1e90ff', fontSize: 16, fontWeight: 'bold' },
-    card: { width: 150, height: 220, marginHorizontal: 8, borderRadius: 8, backgroundColor: '#282828', overflow: 'hidden' },
-    cardImage: { width: '100%', height: '75%', resizeMode: 'cover', backgroundColor: '#1f1f1f' },
-    titleContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
-    cardTitle: { color: '#fff', fontSize: 14, textAlign: 'center' },
+  container: {
+    marginBottom: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginLeft: 10,
+    marginRight: 20,
+    marginBottom: 10,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  seeAllText: {
+    color: '#00aaff',
+    fontSize: 16,
+  },
+  poster: {
+    width: 120,
+    height: 180,
+    marginRight: 10,
+    borderRadius: 5,
+    backgroundColor: '#222',
+  },
 });
 
 export default ContentMediaRow;

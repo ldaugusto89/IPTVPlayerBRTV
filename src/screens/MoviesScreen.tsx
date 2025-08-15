@@ -1,94 +1,91 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SectionList, ActivityIndicator, Image, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
-import { useContent, ApiCategory, VodItem } from '../context/ChannelContext';
-import FocusableButton from '../components/FocusableButton';
-import Sidebar from '../components/Sidebar';
+import { useContent } from '../context/ChannelContext';
 import { getVodCategories, getVodStreams } from '../services/xtreamService';
+import Sidebar from '../components/Sidebar';
+import ContentMediaRow from '../components/ContentMediaRow'; // Reutilizaremos a fileira de carrossel
 
-type NavigationProp = StackNavigationProp<RootStackParamList>;
+type MoviesScreenNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'Movies'
+>;
 
-interface MovieSection {
-  title: string;
-  data: VodItem[][]; // Array de arrays para o padrão SectionList > FlatList
-  id: string;
+// Interface para agrupar a categoria com seus filmes
+interface CategoryWithMovies {
+  category_id: string;
+  category_name: string;
+  movies: any[];
 }
 
-export default function MoviesScreen() {
-  const navigation = useNavigation<NavigationProp>();
-  const { serverInfo, vodCategories, setVodCategories } = useContent();
+const MoviesScreen = () => {
+  const navigation = useNavigation<MoviesScreenNavigationProp>();
+  const { serverInfo } = useContent();
+
+  // Estado para armazenar todas as categorias com seus respectivos filmes
+  const [moviesByCategories, setMoviesByCategories] = useState<
+    CategoryWithMovies[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [sections, setSections] = useState<MovieSection[]>([]);
 
+  // Efeito para buscar TODAS as categorias e TODOS os filmes
   useEffect(() => {
-    const fetchMovieCategories = async () => {
-      if (!serverInfo) return;
-      
+    const fetchAllMovies = async () => {
+      if (!serverInfo) {
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
-      try {
-        const categories = vodCategories.length > 0 ? vodCategories : await getVodCategories(serverInfo);
-        if (vodCategories.length === 0) {
-          setVodCategories(categories || []);
-        }
-        
-        const formattedSections = (categories || []).map((cat: ApiCategory) => ({
-          title: cat.category_name,
-          id: cat.category_id,
-          data: [], // Começa sem filmes carregados
-        }));
-        setSections(formattedSections);
 
-        // Pré-carrega o conteúdo da primeira categoria para uma experiência mais rápida
-        if (formattedSections.length > 0) {
-          loadStreamsForSection(formattedSections[0]);
+      try {
+        // 1. Busca todas as categorias de filmes
+        const categories = await getVodCategories(serverInfo);
+        if (!Array.isArray(categories) || categories.length === 0) {
+          setMoviesByCategories([]);
+          return;
         }
+
+        // 2. Para cada categoria, cria uma promessa para buscar seus filmes
+        const moviePromises = categories.map(category =>
+          getVodStreams(serverInfo, category.category_id).then(movies => ({
+            category_id: category.category_id,
+            category_name: category.category_name,
+            movies: Array.isArray(movies) ? movies : [],
+          })),
+        );
+
+        // 3. Executa todas as buscas em paralelo
+        const results = await Promise.all(moviePromises);
+
+        // 4. Filtra categorias que não retornaram filmes e atualiza o estado
+        setMoviesByCategories(results.filter(cat => cat.movies.length > 0));
       } catch (error) {
-        console.error("Erro ao buscar categorias de filmes:", error);
+        console.error('Erro ao carregar todos os filmes por categoria:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchMovieCategories();
+    fetchAllMovies();
   }, [serverInfo]);
 
-  // Função para carregar os filmes de uma seção específica sob demanda
-  const loadStreamsForSection = async (section: MovieSection) => {
-    if (!serverInfo || section.data.length > 0) return; // Não carrega se já tiver dados
-
-    try {
-      const streams = await getVodStreams(serverInfo, section.id);
-      setSections(prevSections =>
-        prevSections.map(s =>
-          s.id === section.id ? { ...s, data: [streams || []] } : s
-        )
-      );
-    } catch (error) {
-      console.error(`Erro ao buscar filmes para a categoria ${section.id}:`, error);
-    }
-  };
-  
-  const handlePress = (item: VodItem) => {
-    if (!serverInfo) return;
-    
-    const streamUrl = `${serverInfo.serverUrl.replace('/player_api.php', '')}/movie/${serverInfo.username}/${serverInfo.password}/${item.stream_id}.mp4`;
-    
-    navigation.navigate('Player', { 
-      channel: {
-        name: item.name,
-        url: streamUrl,
-        logo: item.stream_icon,
-        group: { title: 'Filmes' }
-      }
-    });
-  };
-
+  // Se estiver carregando, exibe um indicador central
   if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#fff" />
+        <Sidebar navigation={navigation} />
+        <View style={styles.centeredContent}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Carregando filmes...</Text>
+        </View>
       </View>
     );
   }
@@ -96,49 +93,23 @@ export default function MoviesScreen() {
   return (
     <View style={styles.container}>
       <Sidebar navigation={navigation} />
-      <View style={styles.content}>
+      <ScrollView style={styles.mainContent}>
         <Text style={styles.screenTitle}>Filmes</Text>
-        <SectionList
-          sections={sections}
-          keyExtractor={(item, index) => `section-${index}`}
-          onViewableItemsChanged={({ viewableItems }) => {
-            // Carrega o conteúdo das seções que se tornam visíveis ao rolar a tela
-            viewableItems.forEach(viewable => {
-              loadStreamsForSection(viewable.item as any);
-            });
-          }}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={styles.sectionHeader}>{title}</Text>
-          )}
-          renderItem={({ item: movieGroup, section }) => (
-            <FlatList
-              horizontal
-              data={movieGroup}
-              keyExtractor={(movie) => String(movie.stream_id)}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 15 }}
-              renderItem={({ item: movie }) => (
-                <FocusableButton
-                  onPress={() => handlePress(movie)}
-                  style={styles.card}
-                >
-                  <Image
-                    style={styles.cardImage}
-                    source={{ uri: movie.stream_icon }}
-                    defaultSource={require('../assets/placeholder.png')}
-                  />
-                  <View style={styles.titleContainer}>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{movie.name}</Text>
-                  </View>
-                </FocusableButton>
-              )}
-            />
-          )}
-        />
-      </View>
+        {moviesByCategories.map(categoryData => (
+          <ContentMediaRow
+            key={categoryData.category_id}
+            title={categoryData.category_name}
+            items={categoryData.movies.slice(0, 20)}
+            navigation={navigation}
+            seeAllScreen="CategoryDetail"
+            categoryId={categoryData.category_id}
+            type="movie" // Passa o tipo para a navegação
+          />
+        ))}
+      </ScrollView>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -148,11 +119,19 @@ const styles = StyleSheet.create({
   },
   loaderContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: 'row',
     backgroundColor: '#141414',
   },
-  content: {
+  centeredContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#ccc',
+    marginTop: 10,
+  },
+  mainContent: {
     flex: 1,
     paddingLeft: 10,
   },
@@ -162,36 +141,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     margin: 20,
   },
-  sectionHeader: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 10,
-    marginBottom: 5,
-  },
-  card: {
-    width: 150,
-    height: 220,
-    marginHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: '#282828',
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: '100%',
-    height: '75%',
-    resizeMode: 'cover',
-    backgroundColor: '#1f1f1f',
-  },
-  titleContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 14,
-    textAlign: 'center',
-  },
 });
+
+export default MoviesScreen;

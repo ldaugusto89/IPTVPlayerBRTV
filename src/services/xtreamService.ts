@@ -30,29 +30,32 @@ async function fetchFromApi(url: string) {
 }
 
 // Funções para buscar as categorias
-export const getLiveCategories = (serverInfo: ServerInfo) => 
+export const getLiveCategories = (serverInfo: ServerInfo) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_live_categories`);
 
-export const getVodCategories = (serverInfo: ServerInfo) => 
+export const getVodCategories = (serverInfo: ServerInfo) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_vod_categories`);
 
-export const getSeriesCategories = (serverInfo: ServerInfo) => 
+export const getSeriesCategories = (serverInfo: ServerInfo) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_series_categories`);
 
 // Funções para buscar os streams (canais, filmes, etc.) de uma categoria
-export const getLiveStreams = (serverInfo: ServerInfo, categoryId: string) => 
+export const getLiveStreams = (serverInfo: ServerInfo, categoryId: string) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_live_streams&category_id=${categoryId}`);
 
-export const getVodStreams = (serverInfo: ServerInfo, categoryId: string) => 
+export const getVodStreams = (serverInfo: ServerInfo, categoryId: string) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_vod_streams&category_id=${categoryId}`);
 
-export const getSeriesStreams = (serverInfo: ServerInfo, categoryId: string) => 
+export const getSeriesStreams = (serverInfo: ServerInfo, categoryId: string) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_series&category_id=${categoryId}`);
 
-// NOVA FUNÇÃO: Busca os VODs (filmes) adicionados recentemente
+// NOVA FUNÇÃO: Busca os detalhes de uma série específica (temporadas, episódios)
+export const getSeriesInfo = (serverInfo: ServerInfo, seriesId: number) =>
+  fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_series_info&series_id=${seriesId}`);
+
+// FUNÇÕES PARA CONTEÚDO RECENTE NA HOME
 export const getRecentVods = (serverInfo: ServerInfo) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_vod_streams&category_id=*`);
 
-// NOVA FUNÇÃO: Busca as séries adicionadas recentemente
 export const getRecentSeries = (serverInfo: ServerInfo) =>
   fetchFromApi(`${serverInfo.serverUrl}?username=${serverInfo.username}&password=${serverInfo.password}&action=get_series&category_id=*`);

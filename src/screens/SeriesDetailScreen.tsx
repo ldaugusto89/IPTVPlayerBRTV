@@ -1,104 +1,135 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { SeriesDetailScreenRouteProp, SeriesDetailScreenNavigationProp } from '../../@types/navigation';
-import { useContent, M3UItem } from '../context/ChannelContext';
+import {
+  SeriesDetailScreenRouteProp,
+  SeriesDetailScreenNavigationProp,
+} from '../../@types/navigation';
+import { useContent } from '../context/ChannelContext';
+import { getSeriesInfo } from '../services/xtreamService';
+import { buildVideoUrl } from '../utils/buildXtreamUrls';
 import SeriesHeader from '../components/series/SeriesHeader';
 import SeasonSelector from '../components/series/SeasonSelector';
-import FocusableButton from '../components/FocusableButton';
-import { FlashList } from '@shopify/flash-list'; // 1. Importar a FlashList
+import Sidebar from '../components/Sidebar';
 
-// --- Funções de Ajuda (permanecem as mesmas) ---
-const getSeriesBaseName = (name: string) => name.split(/ S\d{1,2}E\d{1,2}/i)[0].trim();
-const getSeasonNumber = (name: string): number => {
-    const match = name.match(/S(\d{1,2})/i);
-    return match ? parseInt(match[1], 10) : 1;
-};
-const getEpisodeNumber = (name: string): number => {
-    const match = name.match(/E(\d{1,3})/i);
-    return match ? parseInt(match[1], 10) : 0;
-}
-
-// --- Componente Principal ---
 export default function SeriesDetailScreen() {
   const route = useRoute<SeriesDetailScreenRouteProp>();
   const navigation = useNavigation<SeriesDetailScreenNavigationProp>();
-  const { seriesName, seriesLogo } = route.params;
-  const { series } = useContent();
+  const { serverInfo } = useContent();
+  const { seriesId } = route.params;
+
+  const [seriesInfo, setSeriesInfo] = useState<any>(null);
+  const [episodesBySeason, setEpisodesBySeason] = useState<any>({});
+  const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // A lógica de filtragem, que sabemos que está correta, permanece a mesma.
-  const uniqueEpisodes = useMemo(() => {
-    const episodeMap = new Map<string, M3UItem>();
-    series
-      .filter(item => getSeriesBaseName(item.name) === seriesName)
-      .forEach(item => {
-        if (!episodeMap.has(item.name)) {
-          episodeMap.set(item.name, item);
-        }
-      });
-    return Array.from(episodeMap.values());
-  }, [series, seriesName]);
-
-  const availableSeasons = useMemo(() => {
-    const seasonSet = new Set<number>();
-    uniqueEpisodes.forEach(episode => {
-      seasonSet.add(getSeasonNumber(episode.name));
-    });
-    return Array.from(seasonSet).sort((a, b) => a - b);
-  }, [uniqueEpisodes]);
-  
   useEffect(() => {
-    if (availableSeasons.length > 0 && selectedSeason === null) {
-      setSelectedSeason(availableSeasons[0]);
+    const fetchDetails = async () => {
+      if (!serverInfo || !seriesId) return;
+      setIsLoading(true);
+      try {
+        const data = await getSeriesInfo(serverInfo, seriesId);
+        setSeriesInfo(data.info);
+
+        const seasons: { [key: number]: any[] } = data.episodes;
+        const seasonNumbers = Object.keys(seasons)
+          .map(Number)
+          .sort((a, b) => a - b);
+        
+        setEpisodesBySeason(seasons);
+        setAvailableSeasons(seasonNumbers);
+        if (seasonNumbers.length > 0) {
+          setSelectedSeason(seasonNumbers[0]);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar detalhes da série:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDetails();
+  }, [serverInfo, seriesId]);
+
+  const handleEpisodePress = (episode: any) => {
+    if (serverInfo) {
+      const videoUrl = buildVideoUrl(serverInfo, episode.id, 'series');
+      if (videoUrl) {
+        navigation.navigate('Player', {
+          videoUrl: videoUrl,
+          title: `${seriesInfo.name} - ${episode.title}`,
+        });
+      }
     }
-  }, [availableSeasons, selectedSeason]);
-
-  const episodesForSelectedSeason = useMemo(() => {
-    if (selectedSeason === null) return [];
-    return uniqueEpisodes
-      .filter(episode => getSeasonNumber(episode.name) === selectedSeason)
-      .sort((a, b) => getEpisodeNumber(a.name) - getEpisodeNumber(b.name));
-  }, [uniqueEpisodes, selectedSeason]);
-
-  const handleEpisodePress = (item: M3UItem) => {
-    navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo });
   };
 
-  // O cabeçalho que será renderizado pela FlashList
-  const renderHeader = () => (
-    <>
-      <SeriesHeader seriesName={seriesName} seriesLogo={seriesLogo} />
-      <SeasonSelector
-        seasons={availableSeasons}
-        selectedSeason={selectedSeason}
-        onSelectSeason={setSelectedSeason}
-      />
-    </>
-  );
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Sidebar navigation={navigation} />
+        <View style={styles.centeredContent}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      </View>
+    );
+  }
+
+  if (!seriesInfo) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.episodeText}>Não foi possível carregar a série.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* 2. Usar a FlashList em vez da FlatList */}
-      <FlashList
-        data={episodesForSelectedSeason}
-        keyExtractor={(item, index) => item.name + index}
-        ListHeaderComponent={renderHeader()}
-        // 3. Adicionar a propriedade obrigatória 'estimatedItemSize'
-        // (altura aproximada de um botão de episódio)
-        estimatedItemSize={60}
-        renderItem={({ item }) => (
-          <FocusableButton style={styles.episodeButton} onPress={() => handleEpisodePress(item)}>
-            <Text style={styles.episodeText}>{item.name}</Text>
-          </FocusableButton>
-        )}
-      />
+      <Sidebar navigation={navigation} />
+      <ScrollView style={styles.mainContent}>
+        <SeriesHeader
+          seriesName={seriesInfo.name}
+          seriesLogo={seriesInfo.cover}
+        />
+        <SeasonSelector
+          seasons={availableSeasons}
+          selectedSeason={selectedSeason}
+          onSelectSeason={setSelectedSeason}
+        />
+        {selectedSeason &&
+          episodesBySeason[selectedSeason]?.map((episode: any) => (
+            <TouchableOpacity
+              key={episode.id}
+              style={styles.episodeButton}
+              onPress={() => handleEpisodePress(episode)}>
+              <Text style={styles.episodeText}>
+                E{episode.episode_num}. {episode.title}
+              </Text>
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#141414' },
-  episodeButton: { padding: 15, backgroundColor: '#222', marginBottom: 5, borderRadius: 5, marginHorizontal: 20 },
+  container: { flex: 1, backgroundColor: '#141414', flexDirection: 'row' },
+  loaderContainer: { flex: 1, backgroundColor: '#141414', flexDirection: 'row' },
+  centeredContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  mainContent: { flex: 1 },
+  episodeButton: {
+    padding: 15,
+    backgroundColor: '#222',
+    marginBottom: 5,
+    borderRadius: 5,
+    marginHorizontal: 20,
+  },
   episodeText: { color: '#fff', fontSize: 16 },
 });

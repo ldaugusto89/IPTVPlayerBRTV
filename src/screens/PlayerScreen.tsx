@@ -8,17 +8,21 @@ type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
 
 export default function PlayerScreen() {
   const route = useRoute<PlayerScreenRouteProp>();
-  // LEITURA DE PARÂMETROS CORRIGIDA:
-  const { url, title, logo } = route.params;
+  // CORREÇÃO: Lê 'videoUrl' em vez de 'url' para corresponder ao que é enviado.
+  const { videoUrl, title } = route.params;
 
   const videoRef = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Adiciona um log para verificar se a URL está chegando corretamente
+  console.log('URL recebida no Player:', videoUrl);
 
   return (
     <View style={styles.container}>
       <Video
         ref={videoRef}
-        source={{ uri: url }} // Usa a URL diretamente
+        // CORREÇÃO: Usa a variável correta 'videoUrl'.
+        source={{ uri: videoUrl }}
         style={StyleSheet.absoluteFill}
         controls={true}
         resizeMode="contain"
@@ -53,5 +57,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     marginTop: 20,
-  }
+  },
 });

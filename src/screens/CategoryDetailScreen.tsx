@@ -1,72 +1,154 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, M3UItem } from '../../@types/navigation';
-import { FlashList } from '@shopify/flash-list';
-import FocusableButton from '../components/FocusableButton';
-import { useFavorites } from '../context/FavoritesContext';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import LinearGradient from 'react-native-linear-gradient';
+import { RootStackParamList } from '../../@types/navigation';
+import { useContent } from '../context/ChannelContext';
+import { getVodStreams, getSeriesStreams } from '../services/xtreamService';
+import Sidebar from '../components/Sidebar';
+import { buildVideoUrl } from '../utils/buildXtreamUrls'; // Importar a função
 
-// Tipos para a navegação e rota desta tela
-type CategoryDetailRouteProp = RouteProp<RootStackParamList, 'CategoryDetail'>;
-type CategoryDetailNavigationProp = StackNavigationProp<RootStackParamList, 'CategoryDetail'>;
+type CategoryDetailScreenRouteProp = RouteProp<
+  RootStackParamList,
+  'CategoryDetail'
+>;
+type CategoryDetailNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'CategoryDetail'
+>;
 
-// Reutilizamos a função para extrair o nome base da série
-const getSeriesBaseName = (name: string) => name.split(/ S\d{1,2}E\d{1,2}/i)[0].trim();
-
-export default function CategoryDetailScreen() {
-  const route = useRoute<CategoryDetailRouteProp>();
+const CategoryDetailScreen = () => {
+  const route = useRoute<CategoryDetailScreenRouteProp>();
   const navigation = useNavigation<CategoryDetailNavigationProp>();
-  const { title, items, type } = route.params; // Recebemos os dados via navegação
-  const { toggleFavorite, isFavorite } = useFavorites();
+  const { serverInfo } = useContent();
 
-  const handlePress = (item: M3UItem) => {
+  const { categoryId, title, type } = route.params;
+
+  const [items, setItems] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchItems = async () => {
+      if (!serverInfo || !categoryId || !type) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        let streams;
+        if (type === 'movie') {
+          streams = await getVodStreams(serverInfo, categoryId);
+        } else if (type === 'series') {
+          streams = await getSeriesStreams(serverInfo, categoryId);
+        }
+        setItems(Array.isArray(streams) ? streams : []);
+      } catch (error) {
+        console.error(
+          `Erro ao buscar itens para a categoria ${categoryId}:`,
+          error,
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [serverInfo, categoryId, type]);
+
+  // Função para lidar com o clique em um item da grade
+  const handleItemPress = (item: any) => {
     if (type === 'series') {
-      navigation.navigate('SeriesDetail', { 
-        seriesName: getSeriesBaseName(item.name), 
-        seriesLogo: item.tvg?.logo || item.logo 
-      });
-    } else {
-      navigation.navigate('Player', { url: item.url, title: item.name, logo: item.tvg?.logo || item.logo });
+      navigation.navigate('SeriesDetail', { seriesId: item.series_id });
+    } else if (type === 'movie' && serverInfo) {
+      const videoUrl = buildVideoUrl(serverInfo, item.stream_id, 'movie');
+      if (videoUrl) {
+        navigation.navigate('Player', {
+          videoUrl: videoUrl,
+          title: item.name,
+        });
+      }
     }
   };
 
+  const renderGridItem = ({ item }: { item: any }) => (
+    // Adiciona o onPress ao TouchableOpacity do item
+    <TouchableOpacity
+      style={styles.gridItem}
+      onPress={() => handleItemPress(item)}>
+      <Image
+        source={{ uri: item.stream_icon || item.cover }}
+        style={styles.poster}
+        resizeMode="cover"
+      />
+      <Text style={styles.itemTitle} numberOfLines={2}>
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <Sidebar navigation={navigation} />
+        <View style={styles.centeredContent}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.screenTitle}>{title}</Text>
-      <FlashList
-        data={items}
-        keyExtractor={(item) => item.url}
-        numColumns={5}
-        estimatedItemSize={196} // Altura do card + margem
-        renderItem={({ item }) => {
-          const displayName = type === 'series' ? getSeriesBaseName(item.name) : item.name;
-          return (
-            <FocusableButton
-              onPress={() => handlePress(item)}
-              onLongPress={() => toggleFavorite(item)}
-              style={styles.card}
-            >
-              <Image style={styles.cardImage} source={{ uri: item.tvg?.logo || item.logo }} defaultSource={require('../assets/placeholder.png')} />
-              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.gradientOverlay} />
-              <Text style={styles.cardTitle} numberOfLines={2}>{displayName}</Text>
-              {isFavorite(item) && <Ionicons name="star" color="#FFD700" size={18} style={styles.starIcon} />}
-            </FocusableButton>
-          );
-        }}
-      />
+      <Sidebar navigation={navigation} />
+      <View style={styles.mainContent}>
+        <Text style={styles.screenTitle}>{title}</Text>
+        <FlatList
+          data={items}
+          renderItem={renderGridItem}
+          keyExtractor={item => (item.stream_id || item.series_id).toString()}
+          numColumns={5}
+          contentContainerStyle={styles.gridContainer}
+        />
+      </View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#141414' },
+  container: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
+  loaderContainer: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
+  centeredContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  mainContent: { flex: 1, paddingLeft: 10 },
   screenTitle: { color: '#fff', fontSize: 28, fontWeight: 'bold', margin: 20 },
-  card: { flex: 1, height: 180, margin: 8, borderRadius: 8, backgroundColor: '#282828', justifyContent: 'flex-end' },
-  cardImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'cover', borderRadius: 8 },
-  gradientOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', borderRadius: 8 },
-  cardTitle: { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center', padding: 8, zIndex: 1 },
-  starIcon: { position: 'absolute', top: 8, right: 8, zIndex: 1 },
+  gridContainer: {
+    paddingHorizontal: 10,
+  },
+  gridItem: {
+    flex: 1,
+    margin: 5,
+    alignItems: 'center',
+  },
+  poster: {
+    width: 150,
+    height: 220,
+    borderRadius: 5,
+    backgroundColor: '#222',
+  },
+  itemTitle: {
+    color: 'white',
+    marginTop: 5,
+    textAlign: 'center',
+    fontSize: 14,
+    width: 150,
+  },
 });
+
+export default CategoryDetailScreen;
