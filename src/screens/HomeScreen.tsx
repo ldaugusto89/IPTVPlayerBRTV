@@ -5,9 +5,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../@types/navigation';
 import { useContent } from '../context/ChannelContext';
 import Sidebar from '../components/Sidebar';
-import { getVodStreams, getSeries, getLiveCategories, getVodCategories, getSeriesCategories } from '../services/xtreamService';
-import ContentMediaRow from '../components/ContentMediaRow';
-import ContentChannelRow from '../components/ContentChannelRow';
+import { getRecentVods, getRecentSeries, getLiveCategories } from '../services/xtreamService';
+import ContentMediaRow from '../components/ContentMediaRow'; // Importando o novo componente de mídia
+import ContentChannelRow from '../components/ContentChannelRow'; // Importando o novo componente de canais
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -15,50 +15,35 @@ const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { 
     serverInfo, 
-    allMovies, setAllMovies, 
-    allSeries, setAllSeries,
+    recentMovies, setRecentMovies,
+    recentSeries, setRecentSeries,
     liveCategories, setLiveCategories,
-    setVodCategories,
-    setSeriesCategories,
     isLoading, setIsLoading
   } = useContent();
 
   useEffect(() => {
-    const fetchAllContent = async () => {
+    const fetchHomeContent = async () => {
       if (!serverInfo) return;
-
-      // Só busca tudo se as listas estiverem vazias, para evitar recarregar
-      if (allMovies.length > 0 || allSeries.length > 0) {
-        setIsLoading(false);
-        return;
-      }
 
       setIsLoading(true);
       try {
-        console.log("Buscando todo o conteúdo para o app...");
-        const [movies, series, liveCat, vodCat, seriesCat] = await Promise.all([
-          getVodStreams(serverInfo),
-          getSeries(serverInfo),
-          getLiveCategories(serverInfo),
-          getVodCategories(serverInfo),
-          getSeriesCategories(serverInfo)
+        const [movies, series, channels] = await Promise.all([
+          getRecentVods(serverInfo),
+          getRecentSeries(serverInfo),
+          getLiveCategories(serverInfo)
         ]);
         
-        setAllMovies(Array.isArray(movies) ? movies : []);
-        setAllSeries(Array.isArray(series) ? series : []);
-        setLiveCategories(Array.isArray(liveCat) ? liveCat : []);
-        setVodCategories(Array.isArray(vodCat) ? vodCat : []);
-        setSeriesCategories(Array.isArray(seriesCat) ? seriesCat : []);
-        console.log("Conteúdo completo carregado!");
-
+        setRecentMovies(Array.isArray(movies) ? movies : []);
+        setRecentSeries(Array.isArray(series) ? series : []);
+        setLiveCategories(Array.isArray(channels) ? channels : []);
       } catch (error) {
-        console.error("Erro ao buscar todo o conteúdo:", error);
+        console.error("Erro ao buscar conteúdo da Home:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchAllContent();
+    fetchHomeContent();
   }, [serverInfo]);
 
   if (isLoading) {
@@ -67,7 +52,6 @@ const HomeScreen = () => {
         <Sidebar navigation={navigation} />
         <View style={styles.content}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Carregando conteúdo do seu provedor...</Text>
         </View>
       </View>
     );
@@ -88,19 +72,19 @@ const HomeScreen = () => {
            />
         )}
 
-        {allMovies.length > 0 && (
+        {recentMovies.length > 0 && (
            <ContentMediaRow 
              title="Filmes" 
-             items={allMovies.slice(0, 10)}
+             items={recentMovies.slice(0, 10)}
              navigation={navigation}
              seeAllScreen="Movies"
            />
         )}
 
-        {allSeries.length > 0 && (
+        {recentSeries.length > 0 && (
            <ContentMediaRow 
              title="Séries" 
-             items={allSeries.slice(0, 10)}
+             items={recentSeries.slice(0, 10)}
              navigation={navigation}
              seeAllScreen="Series"
            />
@@ -112,11 +96,26 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
-  loaderContainer: { flex: 1, flexDirection: 'row', backgroundColor: '#141414' },
-  content: { flex: 1, paddingLeft: 10, justifyContent: 'center', alignItems: 'center' },
-  screenTitle: { color: '#fff', fontSize: 28, fontWeight: 'bold', margin: 20 },
-  loadingText: { color: '#ccc', fontSize: 16, marginTop: 15 },
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#141414',
+  },
+  loaderContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#141414',
+  },
+  content: {
+    flex: 1,
+    paddingLeft: 10,
+  },
+  screenTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    margin: 20,
+  },
 });
 
 export default HomeScreen;

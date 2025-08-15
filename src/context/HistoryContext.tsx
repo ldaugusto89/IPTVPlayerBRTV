@@ -10,7 +10,7 @@ interface HistoryContextType {
   addToHistory: (item: M3UItem) => Promise<void>;
 }
 
-const HistoryContext = createContext<HistoryContextType>({
+export const HistoryContext = createContext<HistoryContextType>({
   history: [],
   addToHistory: async () => {},
 });

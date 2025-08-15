@@ -11,7 +11,7 @@ interface FavoritesContextType {
   toastMessage: string | null; // <-- NOVO: para a mensagem
 }
 
-const FavoritesContext = createContext<FavoritesContextType>({
+export const FavoritesContext = createContext<FavoritesContextType>({
   favorites: [],
   toggleFavorite: () => {},
   isFavorite: () => false,

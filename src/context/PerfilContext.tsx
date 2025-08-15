@@ -10,7 +10,7 @@ interface PerfilContextType {
 }
 
 // Cria o contexto
-const PerfilContext = createContext<PerfilContextType | undefined>(undefined);
+export const PerfilContext = createContext<PerfilContextType | undefined>(undefined);
 
 // Define as props do nosso provider
 interface PerfilProviderProps {
